@@ -1,0 +1,173 @@
+# ----------------------------------------------------------------------------------------------------------------
+# RL_PtG: Deep Reinforcement Learning for Power-to-Gas Dispatch Optimization
+# Reference: https://github.com/SimMarkt/RL_PtG
+
+# config_env: 
+# > Configuration file for the PtG environment, covering three distinct economic business scenarios:
+# > Scenario 1: Involves trading in the electricity, gas, and emission spot markets.
+# > Scenario 2: Features a fixed synthetic natural gas (SNG) price while trading in the electricity and emission spot markets.
+# > Scenario 3: Includes participation in EEG tenders with a combined heat and power (CHP) plant, while trading in the electricity spot market.
+# ----------------------------------------------------------------------------------------------------------------
+
+# Abbreviations:
+#   SNG: Synthetic natural gas
+#   EUA: European emission allowances
+#   CHP: Combined heat and power plant
+#   CH4: Methane
+#   H2: Hydrogen
+#   O2: Oxygen
+#   CO2: Carbon dioxide
+#   H2O_DE: Water vapor (steam)
+#   LHV: Lower heating value
+#   EEG: German Renewable Energy Act (Erneuerbare-Energien-Gesetz)
+
+scenario : 2                    # Business case (must be one of [1, 2, 3])
+operation : OP2                 # Load level: "OP1" or "OP2" for the PtG-CH4 plant
+price_ahead : 13                # Number of forecasted electricity price values for future data (0-12h)
+time_step_op : 2                # Time step between consecutive entries in the methanation operation data [s]
+noise : 10                      # Noise factor influencing state transitions in the methanation process [steps in the operation data]
+eps_len_d : 37                  # No. of days in an episode (episodes are randomly selected without replacement)
+state_change_penalty : 0.0      # Reward penalty during training for state changes (0.0 = no penalty, >0.0 = penalty for mode transitions)
+sim_step : 600                  # Frequency of taking actions [s]
+raw_modified : mod              # State design type: 'raw' (using raw energy market prices) or 'mod' (using modified economic metrics)
+
+# File paths to energy spot market data for training and evaluation:
+# (_train: training set; _val: validation set; _test: test set)
+# _el: electricity spot market data in [h]
+datafile_path_train_el : /data/spot_market_data/data-day-ahead-el-train.csv
+datafile_path_val_el : /data/spot_market_data/data-day-ahead-el-val.csv
+datafile_path_test_el : /data/spot_market_data/data-day-ahead-el-test.csv
+# _gas: natural gas/SNG spot market data in [d]
+datafile_path_train_gas : /data/spot_market_data/data-day-ahead-gas-train.csv
+datafile_path_val_gas : /data/spot_market_data/data-day-ahead-gas-val.csv
+datafile_path_test_gas : /data/spot_market_data/data-day-ahead-gas-test.csv
+# _eua: European emission allowances (EUA) spot market data in [d]
+datafile_path_train_eua : /data/spot_market_data/data-day-ahead-eua-train.csv
+datafile_path_val_eua : /data/spot_market_data/data-day-ahead-eua-val.csv
+datafile_path_test_eua : /data/spot_market_data/data-day-ahead-eua-test.csv
+
+# File paths to process data for the dynamic data-based process model of the methanation plant:
+# Process data w.r.t. the load levels OP1 and OP2
+datafile_path :
+    path : data/
+    datafile:   # Dynamic process data
+        datafile_path2 : data-meth_startup_cold.csv     # Cold startup data
+        datafile_path3 : data-meth_startup_hot.csv      # Warm startup data
+        datafile_path4 : data-meth_cooldown.csv         # Cooldown data
+        datafile_path5 : data-meth_standby_down.csv     # From operation to standby
+        datafile_path6 : data-meth_standby_up.csv       # From idle state to standby
+        datafile_path7 : data-meth_op1_start_p.csv      # Partial load after startup
+        datafile_path8 : data-meth_op2_start_f.csv      # Full load after startup
+        datafile_path9 : data-meth_op3_p_f.csv          # Partial to full load transition
+        datafile_path10 : data-meth_op4_p_f_p_5.csv     # Partial to full load and back after 5 min
+        datafile_path11 : data-meth_op5_p_f_p_10.csv    # Partial to full load and back after 10 min
+        datafile_path12 : data-meth_op6_p_f_p_15.csv    # Partial to full load and back after 15 min
+        datafile_path13 : data-meth_op7_p_f_p_20.csv    # Partial to full load and back after 20 min
+        datafile_path14 : data-meth_op8_f_p.csv         # Full to partial load transition
+        datafile_path15 : data-meth_op9_f_p_f_5.csv     # Full to partial load and back after 5 min
+        datafile_path16 : data-meth_op10_f_p_f_10.csv   # Full to partial load and back after 10 min
+        datafile_path17 : data-meth_op11_f_p_f_15.csv   # Full to partial load and back after 15 min
+        datafile_path18 : data-meth_op12_f_p_f_20.csv   # Full to partial load and back after 20 min  
+
+# Control and inner state spaces of the PtG-CH4 system (aligned with the real-world plant's PLC)
+ptg_state_space:
+  standby : 0
+  cooldown : 1
+  startup : 2
+  partial_load : 3
+  full_load : 4
+
+# Methanation data for steady-state operation at different load levels
+meth_stats_load : 
+    OP1 :  # [off, partial_load, full_load] : [-, -, -]
+        Meth_State : [2, 5, 5]                          # Inner state spaces of the Power-to-Gas system
+        Meth_Action : [6, 10, 11]                       # Action spaces of the Power-to-Gas system
+        Meth_Hot_Cold : [0, 1, 1]                       # Hot [=1] or Cold [=0] methanation reactor
+        Meth_T_cat : [11.0, 451.0, 451.0]               # Maximum catalyst temperature [°C]
+        Meth_H2_flow : [0.0, 0.00701, 0.0198]           # Hydrogen reactant molar flow rate [mol/s]
+        Meth_CH4_flow : [0.0, 0.00172, 0.0048]          # Methane product molar flow rate [mol/s]
+        Meth_H2_res_flow : [0.0, 0.000054, 0.000151]    # Hydrogen product molar flow rate (residues) [mol/s]
+        Meth_H2O_flow : [0.0, 0.0624, 0.458545]         # Water mass flow rate [kg/h]
+        Meth_el_heating : [0.0, 231.0, 350.0]           # Electrical power consumption for methanation heating [W]
+    OP2 :
+        Meth_State : [2, 5, 5]                          
+        Meth_Action : [6, 10, 11]                       
+        Meth_Hot_Cold : [0, 1, 1]                       
+        Meth_T_cat : [11.0, 451.0, 451.0]               
+        Meth_H2_flow : [0.0, 0.0198, 0.0485]            
+        Meth_CH4_flow : [0.0, 0.0048, 0.0114]           
+        Meth_H2_res_flow : [0.0, 0.000151, 0.0017]      
+        Meth_H2O_flow : [0.0, 0.458545, 1.22]           
+        Meth_el_heating : [0.0, 350.0, 380.0]         
+
+# Economic data and parameters
+ch4_price_fix : 15.0               # Fixed SNG price (in business case/scenario 2) [ct/kWh]
+heat_price : 4.6                   # Heat price [ct/kWh]
+o2_price : 10.2                    # O2 price [ct/Nm³]
+water_price : 6.4                  # Water price [ct/m³]
+eeg_el_price : 17.84               # EEG tender price (in business case/scenario 3) [ct/kWh_el]
+# Species properties and efficiencies
+H_u_CH4 : 35.883                   # Lower heating value of methane [MJ/m³]
+H_u_H2 : 10.783                    # Lower heating value of hydrogen [MJ/m³]
+h_H2O_evap : 2257                  # Specific enthalpy of vaporization for water [kJ/kg] (at 0.1 MPa)
+dt_water : 90                      # Temperature difference between cooling water and evaporation [K]
+cp_water : 4.18                    # Specific heat capacity of water [kJ/kgK]
+rho_water : 998                    # Densitiy of water [kg/m³]
+convert_mol_to_Nm3 : 0.02241407    # Conversion factor for moles to Nm³ for ideal gas at normal conditions [Nm³/mol] (convert_mol_to_Nm3 : R_uni * T_0 / p_0 = 8.3145J/mol/K * 273.15K / 101325Pa = 0.02241407 Nm3/mol)
+Molar_mass_CO2 : 44.01             # Molar mass of carbon dioxid [g/mol]
+Molar_mass_H2O : 18.02             # Molar mass of water [g/mol]
+min_load_electrolyzer : 0.032      # Minimum electrolyzer load (3.2%) based on PEMEL regression model
+eta_CHP : 0.38                     # Gas engine/CHP efficiency
+
+# Optional: Reward penalties for state transitions
+r_0_values :   # Reward penalty levels based on price levels of electricity, SNG, and EUA
+    el_price : [0]
+    gas_price : [10]
+    eua_price : [50]
+
+# Threshold values for methanation data
+t_cat_standby : 188.2              # Catalyst temperature threshold for switching to standby data set [°C]
+t_cat_startup_cold : 160           # Catalyst temperature threshold for cold start conditions [°C]
+t_cat_startup_hot : 350            # Catalyst temperature threshold for warm start conditions [°C]
+# Time thresholds for load change data sets
+time1_start_p_f : 1201             # Simulation step -> 2400 sec
+time2_start_f_p : 151              # Simulation step -> 300 sec
+time_p_f : 210                     # Simulation steps for ascending load change -> 420 sec
+time_f_p : 126                     # Simulation steps for descending load change -> 252 sec
+time1_p_f_p : 51                   # Simulation step -> 100 sec
+time2_p_f_p : 151                  # Simulation step -> 300 sec
+time23_p_f_p : 225                 # Simulation step between time2_p_f_p and time3_p_f_p
+time3_p_f_p : 301                  # Simulation step -> 600 sec
+time34_p_f_p : 376                 # Simulation step between time3_p_f_p and time4_p_f_p
+time4_p_f_p : 451                  # Simulation step -> 900 sec
+time45_p_f_p : 563                 # Simulation step between time4_p_f_p and time5_p_f_p
+time5_p_f_p : 675                  # Simulation step -> 1348 sec
+time1_f_p_f : 51                   # Simulation step -> 100 sec
+time2_f_p_f : 151                  # Simulation step -> 300 sec
+time23_f_p_f : 225                 # Simulation step between time2_f_p_f and time3_f_p_f
+time3_f_p_f : 301                  # Simulation step -> 600 sec
+time34_f_p_f : 376                 # Simulation step between time3_f_p_f and time4_f_p_f
+time4_f_p_f : 451                  # Simulation step -> 900 sec
+time45_f_p_f : 526                 # Simulation step between time4_f_p_f and time5_f_p_f
+time5_f_p_f : 601                  # Simulation step -> 1200 sec
+# Fully developed load transition simulation steps
+i_fully_developed : 12000          # Simulation step -> 24000 sec (initial value)
+j_fully_developed : 100            # Simulation step -> 24000 sec (step marker)
+
+# Normalization bounds for PtG environment (adjust based on energy market and process data value ranges)
+el_l_b : -10    # Lower bound of electricity prices [ct/kWh_el]
+el_u_b : 90     # Upper bound of electricity prices [ct/kWh_el]
+gas_l_b : 0.4   # Lower bound of (S)NG prices [ct/kWh_th]
+gas_u_b : 32    # Upper bound of (S)NG prices [ct/kWh_th]
+eua_l_b : 23    # Lower bound of EUA prices [€/t_CO2]
+eua_u_b : 98    # Upper bound of EUA prices [€/t_CO2]
+T_l_b : 10      # Lower bound of catalyst temperatures T_CAT [°C]
+T_u_b : 600     # Upper bound of catalyst temperatures T_CAT [°C]
+h2_l_b : 0      # Lower bound of hydrogen molar flow rate [mol/s]
+ch4_l_b : 0     # Lower bound of methane molar flow rate [mol/s]
+h2_res_l_b : 0  # Lower bound of residual product hydrogen molar flow rate [mol/s]
+h2o_l_b : 0     # Lower bound of water mass flow rate [kg/h]
+# The upper bounds for hydrogen (h2_u_b), methane (ch4_u_b), residual hydrogen (h2_res_u_b), and water (h2o_u_b)
+# correspond to the full_load values from meth_stats_load for the selected load level.
+heat_l_b : 0    # Lower bound of the methanation power consumption [W]
+heat_u_b : 1800 # Upper bound of the methanation power consumption [W]

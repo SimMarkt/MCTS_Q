@@ -1,0 +1,1 @@
+# ptg_gym_env.py contains the PtG-CH4 environment in a gymnasium class

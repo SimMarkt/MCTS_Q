@@ -1,11 +1,11 @@
 import torch
 import torch.nn as nn
-import torch.optim as optim
 import torch.nn.functional as F
 import numpy as np
 from collections import deque
 import random
 
+# ConvAttentionBlock
 class ConvAttentionBlock(nn.Module):
     def __init__(self, input_dim, embed_dim):
         super(ConvAttentionBlock, self).__init__()
@@ -36,10 +36,66 @@ class ConvAttentionBlock(nn.Module):
 
         return x
 
+# GRUAttentionBlock
+class GRUAttentionBlock(nn.Module):
+    def __init__(self, input_dim, embed_dim):
+        super(GRUAttentionBlock, self).__init__()
+        self.gru = nn.GRU(input_dim, embed_dim, batch_first=True)
+        self.attention_weights = nn.Linear(embed_dim, 1)
+        self.norm = nn.LayerNorm(embed_dim)
+
+    def forward(self, x):
+        # x shape: (batch_size, seq_length, input_dim)
+        gru_output, _ = self.gru(x)  # (batch_size, seq_length, embed_dim)
+
+        # Compute attention scores
+        scores = self.attention_weights(gru_output).squeeze(-1)  # (batch_size, seq_length)
+        scores = F.softmax(scores, dim=-1)  # Normalize scores across the sequence dimension
+
+        # Apply attention weights
+        attended = torch.bmm(scores.unsqueeze(1), gru_output).squeeze(1)  # (batch_size, embed_dim)
+
+        # Apply layer normalization
+        attended = self.norm(attended)
+
+        return attended
+
+# TransformerBlock
+class TransformerBlock(nn.Module):
+    def __init__(self, input_dim, embed_dim, num_heads, num_layers):
+        super(TransformerBlock, self).__init__()
+        self.embedding = nn.Linear(input_dim, embed_dim)
+        self.positional_encoding = nn.Parameter(torch.zeros(1, 500, embed_dim))  # Max sequence length = 500
+        encoder_layer = nn.TransformerEncoderLayer(embed_dim, num_heads)
+        self.transformer = nn.TransformerEncoder(encoder_layer, num_layers)
+        self.norm = nn.LayerNorm(embed_dim)
+
+    def forward(self, x):
+        # x shape: (batch_size, seq_length, input_dim)
+        x = self.embedding(x)  # (batch_size, seq_length, embed_dim)
+        x = x + self.positional_encoding[:, :x.size(1), :]  # Add positional encoding
+
+        # Transformer encoder
+        x = self.transformer(x.permute(1, 0, 2))  # (seq_length, batch_size, embed_dim)
+        x = x.mean(dim=0)  # Aggregate along the sequence dimension (batch_size, embed_dim)
+
+        # Apply layer normalization
+        x = self.norm(x)
+
+        return x
+
 class DQN(nn.Module):
-    def __init__(self, state_dim, action_dim, embed_dim, hidden_units):
+    def __init__(self, state_dim, action_dim, embed_dim, hidden_units, attention_type="conv"):
         super(DQN, self).__init__()
-        self.attention = ConvAttentionBlock(state_dim, embed_dim)
+        if attention_type == "conv":
+            self.encoder = ConvAttentionBlock(state_dim, embed_dim)
+        elif attention_type == "gru":
+            self.encoder = GRUAttentionBlock(state_dim, embed_dim)
+        elif attention_type == "transformer":
+            self.encoder = TransformerBlock(state_dim, embed_dim, num_heads=4, num_layers=2)
+        else:
+            raise ValueError("Invalid attention type. Choose from 'conv', 'gru', or 'transformer'.")
+
         self.fc_layers = nn.Sequential(
             nn.Linear(embed_dim, hidden_units),
             nn.ReLU(),
@@ -50,7 +106,7 @@ class DQN(nn.Module):
 
     def forward(self, x):
         # x shape: (batch_size, state_dim, seq_length)
-        x = self.attention(x)
+        x = self.encoder(x)
         x = self.fc_layers(x)
         return x
 

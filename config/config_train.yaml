@@ -11,24 +11,7 @@ com_conf : pc               # Computational resources to be used:
 device : auto               # Computational device to use: ['cpu', 'cuda', 'auto']
                             # 'auto' selects GPU if available, otherwise defaults to CPU
 str_inv : train             # Specifies the training results and models for a specific investigation
-model_conf : simple_train   # Model configuration options: 
-                            # 'simple_train': Train the RL model from scratch
-                            # 'save_model': Train the RL model from scratch and save it afterward
-                            # 'load_model': Load a pretrained RL model and continue training
-                            # 'save_load_model': Load a pretrained RL model, continue training, and save the updated model
-path_files : /logs/          # Path where pretrained RL models and logs are stored
 
-# parallel: Defines the computational setup for parallel execution: 
-# - "Singleprocessing" (DummyVecEnv): Executes worker interactions sequentially; recommended for fast environments (e.g., ptg_gym_env.py)  
-# - "Multiprocessing" (SubprocVecEnv): Executes worker interactions in parallel; ideal for computationally intensive environments
-parallel : Singleprocessing
-# train_or_eval: Specifies the mode of operation, whether training or evaluation:
-# - "eval": Provides detailed state descriptions for evaluation purposes.
-# - "train": Default setting for training; does not provide detailed state descriptions (recommended for training).
-train_or_eval : train
-eval_trials : 5               # No. of evaluation trials to run during validation and testing to properly assess the agent's performance.
-val_n_test : False            # Set to 'True' if the RL agent should be evaluated on both validation and test sets. 
-                              # If 'False', evaluation is done only on the validation set.
 train_steps : 1500000         # No. of training steps
 test_steps : 20000            # Validation interval: No. of steps between evaluations during training
 # Random seeds for reproducibility of neural network initialization and environment randomness:

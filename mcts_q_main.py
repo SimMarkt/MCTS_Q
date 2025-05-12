@@ -21,8 +21,8 @@ from src.rl_config_agent import AgentConfiguration
 from src.rl_config_env import EnvConfiguration
 from src.rl_config_train import TrainConfiguration
 
-from src.mcts_q_config_dqn import DQN, DQNAgent
-from src.mcts_q_config_mcts import MCTS
+from src.mctsq_config_dqn import DQN, DQNAgent
+from src.mctsq_config_mcts import MCTS
 
 def computational_resources(TrainConfig):
     """

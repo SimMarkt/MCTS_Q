@@ -29,7 +29,7 @@ noise : 10                      # Noise factor influencing state transitions in 
 eps_len_d : 37                  # No. of days in an episode (episodes are randomly selected without replacement)
 state_change_penalty : 0.0      # Reward penalty during training for state changes (0.0 = no penalty, >0.0 = penalty for mode transitions)
 sim_step : 600                  # Frequency of taking actions [s]
-raw_modified : mod              # State design type: 'raw' (using raw energy market prices) or 'mod' (using modified economic metrics)
+raw_modified : raw              # State design type: 'raw' (using raw energy market prices) or 'mod' (using modified economic metrics)
 
 # File paths to energy spot market data for training and evaluation:
 # (_train: training set; _val: validation set; _test: test set)
@@ -157,9 +157,9 @@ j_fully_developed : 100            # Simulation step -> 24000 sec (step marker)
 # Normalization bounds for PtG environment (adjust based on energy market and process data value ranges)
 el_l_b : -10    # Lower bound of electricity prices [ct/kWh_el]
 el_u_b : 90     # Upper bound of electricity prices [ct/kWh_el]
-gas_l_b : 0.4   # Lower bound of (S)NG prices [ct/kWh_th]
+gas_l_b : 0     # Lower bound of (S)NG prices [ct/kWh_th]
 gas_u_b : 32    # Upper bound of (S)NG prices [ct/kWh_th]
-eua_l_b : 23    # Lower bound of EUA prices [€/t_CO2]
+eua_l_b : 0     # Lower bound of EUA prices [€/t_CO2]
 eua_u_b : 98    # Upper bound of EUA prices [€/t_CO2]
 T_l_b : 10      # Lower bound of catalyst temperatures T_CAT [°C]
 T_u_b : 600     # Upper bound of catalyst temperatures T_CAT [°C]

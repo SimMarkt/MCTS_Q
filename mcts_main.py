@@ -16,11 +16,11 @@ import gymnasium as gym
 
 # Libraries with utility functions and classes
 from src.ptg_utils import load_data, initial_print, config_print, Preprocessing, plot_results
-from src.mcts_q_config_mcts import MCTS
+from src.mctsq_config_mcts import MCTS
 from src.ptg_config_env import EnvConfiguration
 
 import torch
-from src.mcts_q_config_dqn import DQN, DQNAgent
+from src.mctsq_config_dqn import DQN, DQNAgent
 
 def check_env(env_id):
     """

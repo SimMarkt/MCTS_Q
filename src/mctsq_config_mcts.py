@@ -18,7 +18,9 @@ import torch
 import torch.nn.functional as F
 
 
-from mcts_q_config_dqn import DQN, DQNAgent
+from src.mctsq_config_dqn import DQNModel
+
+#TODO: Include random seeds
 
 class MCTS_Q:
     def __init__(self, env_train):
@@ -39,24 +41,45 @@ class MCTS_Q:
         # Initialize the DQN model
         state_dim = env_train.observation_space.shape[0]
         action_dim = env_train.action_space.n
-        embed_dim = 64
-        hidden_units = 128
 
-        self.dqn = DQNAgent(
+        self.dqn = DQNModel(
             state_dim=state_dim,
             action_dim=action_dim,
-            seq_length=10,  # Example sequence length
-            embed_dim=embed_dim,
-            hidden_units=hidden_units,
-            buffer_capacity=10000,
-            batch_size=64,
-            gamma=0.99,
-            lr=1e-3,
-            epsilon_start=1.0,
-            epsilon_end=0.1,
-            epsilon_decay=0.995,
-            encoder_type="conv"
-        )  
+            seq_length=self.seq_length,  
+            embed_dim=self.embed_dim,
+            hidden_units=self.hidden_units,
+            buffer_capacity=self.buffer_size,
+            batch_size=self.batch_size,
+            gamma=self.discount_factor,
+            lr=self.learning_rate,
+            epsilon_start=self.epsilon_start,
+            epsilon_end=self.epsilon_end,
+            epsilon_decay=self.epsilon_decay,
+            encoder_type=self.encoder_type
+        )
+
+        self.action_type = "discrete" 
+
+        self.str_alg = None          # Initialize the string for the algorithm settings (used for file identification)
+        # Nested dictionary with hyperparameters, including abbreviation ('abb') and variable name ('var') 
+        # 'var' must match the notation in MCTS_Q/config/config_mctsq.yaml
+        self.hyper = {'Iterations': {'abb' :"_it", 'var': 'iterations'},
+                      'PUCT Initial Exploration': {'abb' :"_al", 'var': 'c_init'},
+                      'PUCT Exploration Increase': {'abb' :"_al", 'var': 'c_base'},
+                      'Max Tree depth': {'abb' :"_al", 'var': 'maximum_depth'},
+                      'Learning rate': {'abb' :"_al", 'var': 'learning_rate'},
+                      'Discount factor': {'abb' :"_ga", 'var': 'discount_factor'},
+                      'Initial exploration coefficient': {'abb' :"_ie", 'var': 'epsilon_start'},
+                      'Final exploration coefficient': {'abb' :"_fe", 'var': 'epsilon_end'},
+                      'Decay rate for exploration': {'abb' :"_re", 'var': 'epsilon_decay'},
+                      'Replay buffer size': {'abb' :"_rb", 'var': 'buffer_size'},
+                      'Batch size': {'abb' :"_bs", 'var': 'batch_size'},
+                      'Hidden units': {'abb' :"_hu", 'var': 'hidden_units'},
+                      'Encoder type': {'abb' :"_en", 'var': 'encoder_type'},
+                      'Encoder sequence length': {'abb' :"_sl", 'var': 'seq_length'},
+                      'Embedding dimensions': {'abb' :"_ed", 'var': 'embed_dim'},
+                      } 
+        
 
     def learn(self, total_timesteps, callback):
         """
@@ -110,12 +133,6 @@ class MCTS_Q:
                 node = self._expand(node)
             value = self._evaluate(node.env)
             self._backpropagate(node, value)
-
-        # Log the tree structure and save it to a CSV file if time_store is True
-        if self.time_store:
-            self._log_tree_structure(root_node)
-            self._save_tree_to_csv()
-            self.time_store = False  # Reset the flag after saving
 
         return root_node.most_visited_child().action
     
@@ -202,10 +219,11 @@ class MCTS_Q:
             policy_probs = F.softmax(q_values, dim=-1)  # Compute policy probabilities using softmax
             expected_value = torch.sum(policy_probs * q_values, dim=-1).item()  # Compute the expected value of Q-values
         return expected_value
+        #TODO: Incorporate n-step return for value estimation
 
     def _backpropagate(self, node, value):
         """
-        Backpropagate the reward from the leaf node to the root node
+        Backpropagate the value from the leaf node to the root node
         :param node: The current node in the MCTS tree
         :param value: The value received from the DQN model
         """

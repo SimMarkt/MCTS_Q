@@ -1,0 +1,36 @@
+# ----------------------------------------------------------------------------------------------------------------
+# MCTS_Q: Monte Carlo Tree Search with Deep-Q-Network and Temporal Encoding
+# GitHub Repository: https://github.com/SimMarkt/MCTS_Q
+#
+# config_mcts: 
+# > Configuration file for the MTCS in the PtG-CH4 environment
+# > The algorithm uses Upper Confidence Bound for Trees (UCT) to balance exploration and exploitation
+# ----------------------------------------------------------------------------------------------------------------
+
+# MCTS hyperparameters
+iterations : 1000           # No. of iterations for MCTS
+c_init : 1.0                # Initial exploration parameter for PUCT
+c_base : 100                # Parameter for exploration increase in PUCT
+maximum_depth : 72          # Maximum depth of the tree
+
+# Q-Learning hyperparameters
+learning_rate : 0.001       # Learning rate
+discount_factor : 0.99      # Discount factor for future rewards
+epsilon_start : 1.0         # Initial exploration rate
+epsilon_end : 0.1           # Final exploration rate
+epsilon_decay : 0.995       # Decay rate for exploration
+hidden_units : 128          # Number of hidden units in the DQN model
+buffer_size : 100000        # Size of the replay buffer
+batch_size : 64             # Batch size for training
+
+# Encoder hyperparameters
+encoder_type : "conv"       # Type of encoder used in the DQN model [Conv1D: "conv", GRU: "gru", Transformer: "transformer"]
+seq_length : 10             # Length of the sequence for time-series encoding
+embed_dim : 64              # Dimension of the embedding layer
+
+# Additional settings
+path_log : "/logs/"             # Path to save the logs of the tree structure
+store_interval : 1000            # No. of simulation steps after which the tree structure is logged into a csv file
+
+  
+

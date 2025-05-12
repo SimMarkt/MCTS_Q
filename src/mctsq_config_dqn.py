@@ -5,6 +5,9 @@ import numpy as np
 from collections import deque
 import random
 
+#TODO: Include random seeds
+#TODO: Number of Hidden Layers and Activation Functions as hyperparameters
+
 # ConvAttentionBlock
 class ConvAttentionEnc(nn.Module):
     def __init__(self, input_dim, embed_dim):
@@ -142,7 +145,7 @@ class PrioritizedReplayBuffer:
     def __len__(self):
         return len(self.buffer)
 
-class DQNAgent:
+class DQNModel:
     def __init__(self, state_dim, action_dim, seq_length, embed_dim, hidden_units, buffer_capacity, batch_size, gamma, lr, epsilon_start, epsilon_end, epsilon_decay, encoder_type="conv"):
         self.state_dim = state_dim
         self.action_dim = action_dim

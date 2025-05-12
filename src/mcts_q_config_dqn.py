@@ -6,9 +6,9 @@ from collections import deque
 import random
 
 # ConvAttentionBlock
-class ConvAttentionBlock(nn.Module):
+class ConvAttentionEnc(nn.Module):
     def __init__(self, input_dim, embed_dim):
-        super(ConvAttentionBlock, self).__init__()
+        super(ConvAttentionEnc, self).__init__()
         self.conv1 = nn.Conv1d(in_channels=input_dim, out_channels=embed_dim, kernel_size=3, padding=1)
         self.conv2 = nn.Conv1d(in_channels=embed_dim, out_channels=embed_dim, kernel_size=3, padding=1)
         self.attention_weights = nn.Conv1d(in_channels=embed_dim, out_channels=1, kernel_size=1)  # Attention scores
@@ -37,9 +37,9 @@ class ConvAttentionBlock(nn.Module):
         return x
 
 # GRUAttentionBlock
-class GRUAttentionBlock(nn.Module):
+class GRUAttentionEnc(nn.Module):
     def __init__(self, input_dim, embed_dim):
-        super(GRUAttentionBlock, self).__init__()
+        super(GRUAttentionEnc, self).__init__()
         self.gru = nn.GRU(input_dim, embed_dim, batch_first=True)
         self.attention_weights = nn.Linear(embed_dim, 1)
         self.norm = nn.LayerNorm(embed_dim)
@@ -61,9 +61,9 @@ class GRUAttentionBlock(nn.Module):
         return attended
 
 # TransformerBlock
-class TransformerBlock(nn.Module):
+class TransformerEnc(nn.Module):
     def __init__(self, input_dim, embed_dim, num_heads, num_layers):
-        super(TransformerBlock, self).__init__()
+        super(TransformerEnc, self).__init__()
         self.embedding = nn.Linear(input_dim, embed_dim)
         self.positional_encoding = nn.Parameter(torch.zeros(1, 500, embed_dim))  # Max sequence length = 500
         encoder_layer = nn.TransformerEncoderLayer(embed_dim, num_heads)
@@ -85,14 +85,14 @@ class TransformerBlock(nn.Module):
         return x
 
 class DQN(nn.Module):
-    def __init__(self, state_dim, action_dim, embed_dim, hidden_units, attention_type="conv"):
+    def __init__(self, state_dim, action_dim, embed_dim, hidden_units, encoder_type="conv"):
         super(DQN, self).__init__()
-        if attention_type == "conv":
-            self.encoder = ConvAttentionBlock(state_dim, embed_dim)
-        elif attention_type == "gru":
-            self.encoder = GRUAttentionBlock(state_dim, embed_dim)
-        elif attention_type == "transformer":
-            self.encoder = TransformerBlock(state_dim, embed_dim, num_heads=4, num_layers=2)
+        if encoder_type == "conv":
+            self.encoder = ConvAttentionEnc(state_dim, embed_dim)
+        elif encoder_type == "gru":
+            self.encoder = GRUAttentionEnc(state_dim, embed_dim)
+        elif encoder_type == "transformer":
+            self.encoder = TransformerEnc(state_dim, embed_dim, num_heads=4, num_layers=2)
         else:
             raise ValueError("Invalid attention type. Choose from 'conv', 'gru', or 'transformer'.")
 
@@ -143,7 +143,7 @@ class PrioritizedReplayBuffer:
         return len(self.buffer)
 
 class DQNAgent:
-    def __init__(self, state_dim, action_dim, seq_length, embed_dim, hidden_units, buffer_capacity, batch_size, gamma, lr, epsilon_start, epsilon_end, epsilon_decay):
+    def __init__(self, state_dim, action_dim, seq_length, embed_dim, hidden_units, buffer_capacity, batch_size, gamma, lr, epsilon_start, epsilon_end, epsilon_decay, encoder_type="conv"):
         self.state_dim = state_dim
         self.action_dim = action_dim
         self.seq_length = seq_length
@@ -153,8 +153,8 @@ class DQNAgent:
         self.epsilon_end = epsilon_end
         self.epsilon_decay = epsilon_decay
 
-        self.policy_net = DQN(state_dim, action_dim, embed_dim, hidden_units)
-        self.target_net = DQN(state_dim, action_dim, embed_dim, hidden_units)
+        self.policy_net = DQN(state_dim, action_dim, embed_dim, hidden_units, encoder_type)
+        self.target_net = DQN(state_dim, action_dim, embed_dim, hidden_units, encoder_type)
         self.target_net.load_state_dict(self.policy_net.state_dict())
         self.target_net.eval()
 

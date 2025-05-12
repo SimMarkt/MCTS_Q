@@ -1,0 +1,17 @@
+# ----------------------------------------------------------------------------------------------------------------
+# RL_PtG: Power-to-Gas Dispatch Optimization using Monte Carlo Tree Search (MCTS)
+# GitHub Repository: https://github.com/SimMarkt/MCTS_PtG
+#
+# config_mcts: 
+# > Configuration file for the MTCS in the PtG-CH4 environment
+# > The algorithm uses Upper Confidence Bound for Trees (UCT) to balance exploration and exploitation
+# ----------------------------------------------------------------------------------------------------------------
+
+iterations : 1000           # No. of iterations for MCTS
+c_base : 100                # Exploration parameter for PUCT
+c_init : 1.0                # Initial exploration parameter for PUCT
+maximum_depth : 72          # Maximum depth of the tree
+
+path_log : "/logs/"             # Path to save the logs of the tree structure
+
+store_interval : 1000            # No. of simulation steps after which the tree structure is logged into a csv file

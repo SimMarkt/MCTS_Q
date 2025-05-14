@@ -7,6 +7,7 @@ import random
 
 #TODO: Include random seeds
 #TODO: Number of Hidden Layers and Activation Functions as hyperparameters
+#TODO: Perhaps Include loss which minimizes the the difference between the MCTS policy and DQN policy and also the value (However, the DQN policy directly inferes from the value, not a distinct network -> perhaps not necessary)
 
 # ConvAttentionBlock
 class ConvAttentionEnc(nn.Module):

@@ -192,8 +192,7 @@ class Preprocessing():
 
         self.preprocessing_rew()                # Compute potential reward and load identifier
         self.preprocessing_array()              # Convert day-ahead datasets into NumPy arrays for calculations.
-        self.define_episodes()                  # Define episodes and generate indices for random subset selection in training          
-        
+        self.define_episodes()                  # Define episodes and generate indices for random subset selection in training                
 
     def preprocessing_rew(self):
         """

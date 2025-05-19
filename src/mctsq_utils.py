@@ -14,6 +14,9 @@ from tqdm import tqdm
 
 from src.rl_opt import calculate_optimum
 
+#TODO: rew_u_b und rew_u_l immer über training set auch in RL_PtG
+#TODO in RL_PtG irgendwo comment einfügen, warum kein truncate sondern nur terminate
+
 def import_market_data(csvfile: str, type: str, path: str):
     """
         Imports day-ahead market price data.
@@ -142,17 +145,15 @@ def load_data(EnvConfig, TrainConfig):
 class Preprocessing():
     """A class for preprocessing energy market and process data"""
 
-    def __init__(self, dict_price_data, dict_op_data, AgentConfig, EnvConfig, TrainConfig):
+    def __init__(self, dict_price_data, dict_op_data, EnvConfig, TrainConfig):
         """
             Initializes preprocessing with configuration parameters and data
             :param dict_price_data: Dictionary containing historical market data.
             :param dict_op_data: Dictionary containing dynamic process data.
-            :param AgentConfig: Configuration settings for the agent.
             :param EnvConfig: Configuration settings for the environment.
             :param TrainConfig: Configuration settings for training.
         """
         # Store configuration objects and input data
-        self.AgentConfig = AgentConfig
         self.EnvConfig = EnvConfig
         self.TrainConfig = TrainConfig
         self.dict_price_data = dict_price_data
@@ -160,6 +161,7 @@ class Preprocessing():
         # Placeholder variables for computed values.
         self.dict_pot_r_b = None                    # Dictionary containing the potential reward [pot_rew...] and the boolean load identifier [part_full_b...]
         self.r_level = None                         # Defines the reward penalty level based on electricity, synthetic natural gas (SNG), and EUA price levels
+        self.r_norm
 
         # e_r_b_train/e_r_b_val/e_r_b_test: (hourly values)
         #   np.array which stores elec. price data, potential reward, and boolean identifier
@@ -352,7 +354,7 @@ class Preprocessing():
                 "time34_f_p_f", "time4_f_p_f", "time45_f_p_f", "time5_f_p_f", "i_fully_developed", 
                 "j_fully_developed", "el_l_b", "el_u_b", "gas_l_b", "gas_u_b", "eua_l_b", "eua_u_b",
                 "T_l_b", "T_u_b", "h2_l_b", "h2_u_b", "ch4_l_b", "ch4_u_b", "h2_res_l_b", "h2_res_u_b",
-                "h2o_l_b", "h2o_u_b", "heat_l_b", "heat_u_b", "raw_modified"]},
+                "h2o_l_b", "h2o_u_b", "heat_l_b", "heat_u_b"]},
             "parallel": self.TrainConfig.parallel,
             "n_eps_loops": self.n_eps_loops,
             "reward_level": self.r_level,
@@ -361,6 +363,16 @@ class Preprocessing():
 
         # Operation data
         env_kwargs.update({key: self.dict_op_data[key] for key in self.dict_op_data})
+        env_kwargs.update({
+                "seq_length": self.TrainConfig.seq_length,              # Length of the sequence for time-series encoding
+                "seq_step": self.TrainConfig.seq_step,                  # Number of data steps in process data between two consequitive entries in the sequences
+                "state_change_penalty": self.EnvConfig.state_change_penalty,
+                "eps_sim_steps": self.eps_sim_steps_train,
+                "e_r_b": self.e_r_b_train,
+                "g_e": self.g_e_train,
+                "rew_l_b": np.min(self.e_r_b_train[1, 0, :]),
+                "rew_u_b": np.max(self.e_r_b_train[1, 0, :]),
+            })
 
         # Set type-specific parameters
         if type == "train":
@@ -383,16 +395,16 @@ class Preprocessing():
                     "eps_sim_steps": self.eps_sim_steps_val,
                     "e_r_b": self.e_r_b_val,
                     "g_e": self.g_e_val,
-                    "rew_l_b": np.min(self.e_r_b_val[1, 0, :]),
-                    "rew_u_b": np.max(self.e_r_b_val[1, 0, :]),
+                    "rew_l_b": np.min(self.e_r_b_train[1, 0, :]),
+                    "rew_u_b": np.max(self.e_r_b_train[1, 0, :]),
                 })
             elif type == "test":
                 env_kwargs.update({
                     "eps_sim_steps": self.eps_sim_steps_test,
                     "e_r_b": self.e_r_b_test,
                     "g_e": self.g_e_test,
-                    "rew_l_b": np.min(self.e_r_b_test[1, 0, :]),
-                    "rew_u_b": np.max(self.e_r_b_test[1, 0, :]),
+                    "rew_l_b": np.min(self.e_r_b_train[1, 0, :]),
+                    "rew_u_b": np.max(self.e_r_b_train[1, 0, :]),
                 })
             else:
                 raise ValueError(f'Invalid type: {type}. Must be "train", "val", or "test".')
@@ -401,9 +413,9 @@ class Preprocessing():
                    
 
 def initial_print():
-    print('\n--------------------------------------------------------------------------------------------')    
-    print('---------RL_PtG: Deep Reinforcement Learning for Power-to-Gas dispatch optimization---------')
-    print('--------------------------------------------------------------------------------------------\n')
+    print('\n---------------------------------------------------------------------------------------------')    
+    print('--MCTS_Q: Monte Carlo Tree Search and Deep Q Network for Power-to-Gas dispatch optimization--')
+    print('---------------------------------------------------------------------------------------------\n')
 
 
 def config_print(AgentConfig, EnvConfig, TrainConfig):
@@ -415,20 +427,14 @@ def config_print(AgentConfig, EnvConfig, TrainConfig):
         :return str_id: String for identification of the present training run
     """
     print("Set training case...")
-    if TrainConfig.model_conf == "simple_train" or TrainConfig.model_conf == "save_model":
-        print(f"---Training case details: RL_PtG{TrainConfig.str_inv} | {TrainConfig.model_conf} ")
-    else: 
-        print(f"---Training case details: RL_PtG{TrainConfig.str_inv} | {TrainConfig.model_conf} | (Pretrained model: RL_PtG{TrainConfig.str_inv_load}) ")
-    str_id = "RL_PtG_" + TrainConfig.str_inv
+    print(f"---Training case details: RL_PtG{TrainConfig.str_inv} | {TrainConfig.model_conf} ")
+    str_id = "MCTS_Q_" + TrainConfig.str_inv
     if EnvConfig.scenario == 1: print("    > Business case (_BS):\t\t\t 1 - Trading at the electricity, gas, and emission spot markets")
     elif EnvConfig.scenario == 2: print("    > Business case  (_BS):\t\t\t 2 - Fixed synthetic natural gas (SNG) price and trading at the electricity and emission spot markets")
     else: print("    > Business case (_BS):\t\t\t 3 - Participating in EEG tenders by using a CHP plant and trading at the electricity spot markets")
     str_id += "_BS" + str(EnvConfig.scenario)
     print(f"    > Operational load level (_OP) :\t\t {EnvConfig.operation}")
     str_id += "_" + str(EnvConfig.operation)
-    if EnvConfig.raw_modified == 'raw':    print(f"    > State feature design (_sf) :\t\t Raw energy market data (electricity, gas, and EUA market signals)")
-    else: print(f"    > State feature design (_sf) :\t\t Modified energy market data (potential reward and load identifier)")
-    str_id += "_sf" + str(EnvConfig.raw_modified)
     print(f"    > Training episode length (_ep) :\t\t {EnvConfig.eps_len_d} days")
     str_id += "_ep" + str(EnvConfig.eps_len_d)
     print(f"    > Time step size (action frequency) (_ts) :\t {EnvConfig.sim_step} seconds")
@@ -439,66 +445,29 @@ def config_print(AgentConfig, EnvConfig, TrainConfig):
 
     return str_id
 
+class CallbackVal():
 
-def _make_env(env_id, n_envs, seed, env_kwargs, vec_env_cls=DummyVecEnv):
-    """Helper function to create and normalized environments"""
+    def __init__(self, env_id, env_kwargs_data_val, val_steps):
+        self.env = gym.make(env_id, env_kwargs_data_val, train_or_eval = "eval")
+        self.val_steps = val_steps  
+        self.stats = {'steps': [],
+                      'cum_rew': []}
 
-    env = make_vec_env(env_id=env_id, n_envs=n_envs, seed=seed, vec_env_cls=vec_env_cls, env_kwargs=env_kwargs)
 
-    return VecNormalize(env, norm_obs=False)
+def create_envs(env_id, env_kwargs_data, TrainConfig):
+    """Creates environments for training, validation, and testing"""
 
-def eval_callback_dec(env_fn):
-    """Decorator to create an evaluation environment and its EvalCallback"""
+    env_train = gym.make(env_id, env_kwargs_data['env_kwargs_train'], train_or_eval = "train")
+    env_test_post = gym.make(env_id, env_kwargs_data['env_kwargs_test'], train_or_eval = "test")
 
-    def wrapper(env_id, str_id, TrainConfig, AgentConfig, env_kwargs, suffix, render_mode="None", n_envs=None):
-        """Wrapper function to create evaluation environment and callback"""
-        # Default n_envs to TrainConfig.eval_trials if not provided
-        n_envs = n_envs if n_envs is not None else TrainConfig.eval_trials  
+    callback_val = CallbackVal(env_id, env_kwargs_data['env_kwargs_val'], val_steps=TrainConfig.val_steps)
 
-        env = env_fn(env_id, n_envs, TrainConfig.seed_test, env_kwargs, render_mode)
-        callback = EvalCallback(env,
-                                best_model_save_path=f"{TrainConfig.path}/logs/{str_id}_{suffix}/",
-                                n_eval_episodes=TrainConfig.eval_trials,
-                                log_path=f"{TrainConfig.path}/logs/",
-                                eval_freq=int(TrainConfig.test_steps / AgentConfig.n_envs),
-                                deterministic=True, render=False, verbose=0)
-        return env, callback
-    return wrapper
-
-@eval_callback_dec
-def _make_eval_env(env_id, n_envs, seed, env_kwargs, render_mode="None"):
-    """Creates an evaluation environment"""
-
-    return _make_env(env_id, n_envs, seed, 
-                     dict(dict_input=env_kwargs, train_or_eval="eval", render_mode=render_mode))
-
-def create_vec_envs(env_id, str_id, AgentConfig, TrainConfig, env_kwargs_data):
-    """Creates vectorized environments for training, validation, and testing"""
-
-    # Set processing type
-    if TrainConfig.parallel == "Singleprocessing":  vec_env_cls = DummyVecEnv   # DummyVecEnv -> computes each workers interaction in serial, if calculating the env itself is quite fast
-    elif TrainConfig.parallel == "Multiprocessing": vec_env_cls = SubprocVecEnv # SubprocVecEnv for multiprocessing -> computes each workers interaction in parallel, if calculating the env itself is quite slow 
-    else: assert False, 'Choose either "Singleprocessing" or "Multiprocessing" in RL_PTG/config/config_train.yaml -> parallel!'
-
-    # Create training environment
-    env_train = _make_env(env_id, AgentConfig.n_envs, TrainConfig.seed_train, 
-                          dict(dict_input=env_kwargs_data['env_kwargs_train'], 
-                               train_or_eval=TrainConfig.train_or_eval, render_mode="None"), vec_env_cls)
-
-    # Create callbacks for validation and test
-    _, eval_callback_val = _make_eval_env(env_id, str_id, TrainConfig, AgentConfig, env_kwargs_data['env_kwargs_val'], "val")
-    _, eval_callback_test = _make_eval_env(env_id, str_id, TrainConfig, AgentConfig, env_kwargs_data['env_kwargs_test'], "test")
-    
-    # Create second test environment with only one instance of the environment for postprocessing
-    env_test_post, _ = _make_eval_env(env_id, str_id, TrainConfig, AgentConfig, env_kwargs_data['env_kwargs_test'], "test_post", n_envs=1)
-
-    return env_train, env_test_post, eval_callback_val, eval_callback_test
-    
+    return env_train, callback_val, env_test_post
        
 class Postprocessing():
     """A class for post-processing"""
 
-    def __init__(self, str_id, AgentConfig, EnvConfig, TrainConfig, env_test_post, Preprocess):
+    def __init__(self, str_id, AgentConfig, EnvConfig, TrainConfig, env_test_post, Preprocess, model):
         """
             Initializes variables
             :param str_id: Unique identifier for the current training run.
@@ -512,13 +481,10 @@ class Postprocessing():
         self.EnvConfig = EnvConfig
         self.TrainConfig = TrainConfig
         self.eps_sim_steps_test = Preprocess.eps_sim_steps_test
-        model_path = f"{TrainConfig.path}{TrainConfig.path_files}{str_id}_val/best_model"
         self.env_test_post = env_test_post
         self.stats_dict_test = {}
         self.str_id = str_id
-
-        print(f"---Load RL model which performs best on the validation set \n\t {model_path}") 
-        self.model = AgentConfig.load_model(env=None, tb_log=None, model_path=model_path, type='eval')
+        self.model = model
 
     def test_performance(self):
         """

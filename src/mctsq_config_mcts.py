@@ -25,11 +25,12 @@ from src.mctsq_config_dqn import DQNModel
 #TODO: Write stats during training and evaluation into tensorboard file
 
 class MCTS_Q:
-    def __init__(self, env_train):
+    def __init__(self, env_train, seed):
         """
         Initialize MCTS_Q with the training environment and DQN agent.
         :param env_train: The training environment
         :param dqn: The DQN model for support of MCTS action selection
+        :param seed: Random seed for reproducibility
         """
         # Load the algorithm configuration from the YAML file
         with open("config/config_mctsq.yaml", "r") as env_file:
@@ -45,10 +46,12 @@ class MCTS_Q:
         action_dim = env_train.action_space.n
 
         self.dqn = DQNModel(
-            state_dim=state_dim,
-            action_dim=action_dim,
-            seq_length=self.seq_length,  
+            el_input_dim=, 
+            process_input_dim=, 
+            gas_eua_input_dim=, 
+            action_dim=action_dim, 
             embed_dim=self.embed_dim,
+            hidden_layers=self.hidden_layers,
             hidden_units=self.hidden_units,
             buffer_capacity=self.buffer_size,
             batch_size=self.batch_size,
@@ -57,7 +60,11 @@ class MCTS_Q:
             epsilon_start=self.epsilon_start,
             epsilon_end=self.epsilon_end,
             epsilon_decay=self.epsilon_decay,
-            encoder_type=self.encoder_type
+            price_encoder_type=self.price_encoder_type,
+            process_encoder_type=self.process_encoder_type,
+            gas_eua_encoder_type=self.gas_eua_encoder_type,
+            activation=self.activation,
+            seed=seed
         )
 
         self.action_type = "discrete"

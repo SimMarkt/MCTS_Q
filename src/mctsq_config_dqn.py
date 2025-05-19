@@ -5,9 +5,39 @@ import numpy as np
 from collections import deque
 import random
 
-#TODO: Include random seeds
-#TODO: Number of Hidden Layers and Activation Functions as hyperparameters
+#TODO: Add a function to save the model
+#TODO: Add a function to load the model
+#TODO: Add time features to the data  
 #TODO: Perhaps Include loss which minimizes the the difference between the MCTS policy and DQN policy and also the value (However, the DQN policy directly inferes from the value, not a distinct network -> perhaps not necessary)
+
+# Utility functions for temporal encoding
+def add_time_features(data, step_minutes, start_minute=0):
+    """
+    Adds sin/cos time-of-hour encoding to each time step.
+    data: (batch, seq_len, features)
+    Returns: (batch, seq_len, features+2)
+    """
+    batch, seq_len, _ = data.shape
+    minutes = (np.arange(seq_len) * step_minutes + start_minute) % 60
+    radians = 2 * np.pi * minutes / 60
+    sin_time = np.sin(radians)
+    cos_time = np.cos(radians)
+    time_features = np.stack([sin_time, cos_time], axis=-1)  # (seq_len, 2)
+    time_features = np.broadcast_to(time_features, (batch, seq_len, 2))
+    return np.concatenate([data, time_features], axis=-1)
+
+def add_time_features_to_gas_eua(data, hours_offsets=[-12, 0, 12]):
+    """
+    Adds sin/cos time-of-day encoding to each of the 3 gas/EUA price points.
+    data: (batch, 3, features)
+    """
+    batch = data.shape[0]
+    radians = 2 * np.pi * (np.array(hours_offsets) % 24) / 24
+    sin_time = np.sin(radians)
+    cos_time = np.cos(radians)
+    time_features = np.stack([sin_time, cos_time], axis=-1)  # (3, 2)
+    time_features = np.broadcast_to(time_features, (batch, 3, 2))
+    return np.concatenate([data, time_features], axis=-1)
 
 # ConvAttentionBlock
 class ConvAttentionEnc(nn.Module):
@@ -88,32 +118,108 @@ class TransformerEnc(nn.Module):
 
         return x
 
-class DQN(nn.Module):
-    def __init__(self, state_dim, action_dim, embed_dim, hidden_units, encoder_type="conv"):
-        super(DQN, self).__init__()
-        if encoder_type == "conv":
-            self.encoder = ConvAttentionEnc(state_dim, embed_dim)
+# Small encoder for gas/EUA price (MLP or GRU)
+class GasEUAEncoder(nn.Module):
+    def __init__(self, input_dim, embed_dim, encoder_type="mlp"):
+        super(GasEUAEncoder, self).__init__()
+        if encoder_type == "mlp":
+            self.encoder = nn.Sequential(
+                nn.Linear(input_dim * 3, embed_dim),
+                nn.ReLU(),
+                nn.Linear(embed_dim, embed_dim),
+                nn.ReLU()
+            )
+            self.flatten = True
         elif encoder_type == "gru":
-            self.encoder = GRUAttentionEnc(state_dim, embed_dim)
-        elif encoder_type == "transformer":
-            self.encoder = TransformerEnc(state_dim, embed_dim, num_heads=4, num_layers=2)
+            self.encoder = GRUAttentionEnc(input_dim, embed_dim)
+            self.flatten = False
         else:
-            raise ValueError("Invalid attention type. Choose from 'conv', 'gru', or 'transformer'.")
-
-        self.fc_layers = nn.Sequential(
-            nn.Linear(embed_dim, hidden_units),
-            nn.ReLU(),
-            nn.Linear(hidden_units, hidden_units),
-            nn.ReLU(),
-            nn.Linear(hidden_units, action_dim)
-        )
+            raise ValueError("Invalid gas/EUA encoder type.")
 
     def forward(self, x):
-        # x shape: (batch_size, state_dim, seq_length)
-        x = self.encoder(x)
-        x = self.fc_layers(x)
-        return x
+        # x: (batch, 3, input_dim)
+        if self.flatten:
+            x = x.view(x.size(0), -1)
+        return self.encoder(x)
+    
+def get_activation(activation_name):
+    if activation_name.lower() == "relu":
+        return nn.ReLU()
+    elif activation_name.lower() == "tanh":
+        return nn.Tanh()
+    else:
+        raise ValueError(f"Unsupported activation function: {activation_name}")
 
+class TripleEncoderDQN(nn.Module):
+    """
+    DQN with three parallel encoders for different time-series modalities.
+    """
+    def __init__(
+        self,
+        el_input_dim, gas_eua_input_dim, process_input_dim, 
+        embed_dim, hidden_layers, hidden_units, action_dim,
+        price_encoder_type="conv", process_encoder_type="gru", gas_eua_encoder_type="mlp",
+        activation="relu"
+    ):
+        super(TripleEncoderDQN, self).__init__()
+
+        # Electricity Price encoder
+        if price_encoder_type == "conv":
+            self.price_encoder = ConvAttentionEnc(el_input_dim, embed_dim)
+        elif price_encoder_type == "gru":
+            self.price_encoder = GRUAttentionEnc(el_input_dim, embed_dim)
+        elif price_encoder_type == "transformer":
+            self.price_encoder = TransformerEnc(el_input_dim, embed_dim, num_heads=4, num_layers=2)
+        else:
+            raise ValueError("Invalid price encoder type.")
+
+        # Process encoder
+        if process_encoder_type == "conv":
+            self.process_encoder = ConvAttentionEnc(process_input_dim, embed_dim)
+        elif process_encoder_type == "gru":
+            self.process_encoder = GRUAttentionEnc(process_input_dim, embed_dim)
+        elif process_encoder_type == "transformer":
+            self.process_encoder = TransformerEnc(process_input_dim, embed_dim, num_heads=4, num_layers=2)
+        else:
+            raise ValueError("Invalid process encoder type.")
+
+        # Gas/EUA encoder
+        self.gas_eua_encoder = GasEUAEncoder(gas_eua_input_dim, embed_dim, encoder_type=gas_eua_encoder_type)
+
+        # Build fully connected layers dynamically
+        fc_layers = []
+        input_dim = embed_dim * 3
+        act = get_activation(activation)
+        for i in range(hidden_layers):
+            fc_layers.append(nn.Linear(input_dim, hidden_units))
+            fc_layers.append(act)
+            input_dim = hidden_units
+        fc_layers.append(nn.Linear(hidden_units, action_dim))
+        self.fc_layers = nn.Sequential(*fc_layers)
+
+    def forward(self, price_data, process_data, gas_eua_data):
+        # price_data: (batch, price_seq_len, el_input_dim)
+        # process_data: (batch, process_seq_len, process_input_dim)
+        # gas_eua_data: (batch, 3, gas_eua_input_dim)
+
+        # Adjust input shape for encoders if needed
+        if isinstance(self.price_encoder, ConvAttentionEnc):
+            price_data = price_data.permute(0, 2, 1)  # (batch, input_dim, seq_len)
+            price_feat = self.price_encoder(price_data)
+        else:
+            price_feat = self.price_encoder(price_data)
+
+        if isinstance(self.process_encoder, ConvAttentionEnc):
+            process_data = process_data.permute(0, 2, 1)
+            process_feat = self.process_encoder(process_data)
+        else:
+            process_feat = self.process_encoder(process_data)
+
+        gas_eua_feat = self.gas_eua_encoder(gas_eua_data)
+
+        combined = torch.cat([price_feat, process_feat, gas_eua_feat], dim=-1)
+        return self.fc_layers(combined)
+    
 class PrioritizedReplayBuffer:
     def __init__(self, capacity, alpha=0.6):
         self.buffer = deque(maxlen=capacity)
@@ -147,35 +253,106 @@ class PrioritizedReplayBuffer:
         return len(self.buffer)
 
 class DQNModel:
-    def __init__(self, state_dim, action_dim, seq_length, embed_dim, hidden_units, buffer_capacity, batch_size, gamma, lr, epsilon_start, epsilon_end, epsilon_decay, encoder_type="conv"):
-        self.state_dim = state_dim
+    def __init__(
+        self,
+        el_input_dim, process_input_dim, gas_eua_input_dim, 
+        action_dim, embed_dim, hidden_layers, hidden_units, buffer_capacity, batch_size, gamma, lr,
+        epsilon_start, epsilon_end, epsilon_decay,
+        price_encoder_type="conv", process_encoder_type="gru", gas_eua_encoder_type="mlp",
+        activation="relu",
+        seed=None
+    ):
+        # Set random seeds for reproducibility
+        if seed is not None:
+            torch.manual_seed(seed)
+            np.random.seed(seed)
+            random.seed(seed)
+            if torch.cuda.is_available():
+                torch.cuda.manual_seed_all(seed)
+
+        self.el_input_dim = el_input_dim
+        self.gas_eua_input_dim = gas_eua_input_dim
+        self.process_input_dim = process_input_dim
         self.action_dim = action_dim
-        self.seq_length = seq_length
         self.gamma = gamma
         self.batch_size = batch_size
         self.epsilon = epsilon_start
         self.epsilon_end = epsilon_end
         self.epsilon_decay = epsilon_decay
 
-        self.policy_net = DQN(state_dim, action_dim, embed_dim, hidden_units, encoder_type)
-        self.target_net = DQN(state_dim, action_dim, embed_dim, hidden_units, encoder_type)
+        self.policy_net = TripleEncoderDQN(
+            el_input_dim, gas_eua_input_dim, process_input_dim, 
+            embed_dim, hidden_layers, hidden_units, action_dim,
+            price_encoder_type, process_encoder_type, gas_eua_encoder_type,
+            activation
+        )
+        self.target_net = TripleEncoderDQN(
+            el_input_dim, gas_eua_input_dim, process_input_dim, 
+            embed_dim, hidden_layers, hidden_units, action_dim,
+            price_encoder_type, process_encoder_type, gas_eua_encoder_type,
+            activation
+        )
         self.target_net.load_state_dict(self.policy_net.state_dict())
         self.target_net.eval()
 
-        self.optimizer = optim.Adam(self.policy_net.parameters(), lr=lr)
+        self.optimizer = torch.optim.Adam(self.policy_net.parameters(), lr=lr)
         self.replay_buffer = PrioritizedReplayBuffer(buffer_capacity)
 
-    def select_action(self, state):
+    def select_action(self, price_state, process_state):
         if random.random() < self.epsilon:
             return random.randint(0, self.action_dim - 1)
         else:
-            state = torch.FloatTensor(state).unsqueeze(0)  # Add batch dimension
+            price_state = torch.FloatTensor(price_state).unsqueeze(0)
+            process_state = torch.FloatTensor(process_state).unsqueeze(0)
             with torch.no_grad():
-                q_values = self.policy_net(state)
+                q_values = self.policy_net(price_state, process_state)
             return q_values.argmax().item()
 
-    def compute_multi_step_return(self, rewards, next_states, dones, n_steps):
-        """Compute multi-step returns."""
+    def update(self):
+        if len(self.replay_buffer) < self.batch_size:
+            return
+
+        # Unpack buffer: states should be tuples (price_state, process_state)
+        batch = self.replay_buffer.sample(self.batch_size)
+        states, actions, rewards, next_states, dones, weights, indices = batch
+
+        price_states = np.array([s[0] for s in states])
+        process_states = np.array([s[1] for s in states])
+        next_price_states = np.array([ns[0] for ns in next_states])
+        next_process_states = np.array([ns[1] for ns in next_states])
+
+        price_states = torch.FloatTensor(price_states)
+        process_states = torch.FloatTensor(process_states)
+        next_price_states = torch.FloatTensor(next_price_states)
+        next_process_states = torch.FloatTensor(next_process_states)
+        actions = torch.LongTensor(actions)
+        rewards = torch.FloatTensor(rewards)
+        dones = torch.FloatTensor(dones)
+
+        # Compute Q values
+        q_values = self.policy_net(price_states, process_states).gather(1, actions.unsqueeze(1)).squeeze(1)
+
+        # Compute target Q values with multi-step returns
+        n_steps = 3
+        multi_step_returns = self.compute_multi_step_return(rewards, next_price_states, next_process_states, dones, n_steps)
+        with torch.no_grad():
+            next_q_values_policy = self.policy_net(next_price_states, next_process_states).max(1)[0]
+            next_q_values_target = self.target_net(next_price_states, next_process_states).max(1)[0]
+            next_q_values = 0.5 * (next_q_values_policy + next_q_values_target)
+            target_q_values = multi_step_returns + (self.gamma ** n_steps) * next_q_values * (1 - dones)
+
+        td_error = q_values - target_q_values
+        loss = (weights * td_error.pow(2)).mean()
+
+        self.optimizer.zero_grad()
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.policy_net.parameters(), max_norm=10)
+        self.optimizer.step()
+
+        self.replay_buffer.update_priorities(indices, td_error.abs().detach().numpy())
+        self.epsilon = max(self.epsilon_end, self.epsilon * self.epsilon_decay)
+
+    def compute_multi_step_return(self, rewards, next_price_states, next_process_states, dones, n_steps):
         returns = []
         for t in range(len(rewards)):
             G = 0
@@ -188,46 +365,6 @@ class DQNModel:
                         break
             returns.append(G)
         return torch.FloatTensor(returns)
-
-    def update(self):
-        if len(self.replay_buffer) < self.batch_size:
-            return
-
-        states, actions, rewards, next_states, dones, weights, indices = self.replay_buffer.sample(self.batch_size)
-
-        states = torch.FloatTensor(states)
-        actions = torch.LongTensor(actions)
-        rewards = torch.FloatTensor(rewards)
-        next_states = torch.FloatTensor(next_states)
-        dones = torch.FloatTensor(dones)
-
-        # Compute Q values
-        q_values = self.policy_net(states).gather(1, actions.unsqueeze(1)).squeeze(1)
-
-        # Compute target Q values with multi-step returns
-        n_steps = 3  # Example: 3-step returns
-        multi_step_returns = self.compute_multi_step_return(rewards, next_states, dones, n_steps)
-        with torch.no_grad():
-            next_q_values_policy = self.policy_net(next_states).max(1)[0]
-            next_q_values_target = self.target_net(next_states).max(1)[0]
-            next_q_values = 0.5 * (next_q_values_policy + next_q_values_target)  # Target regularization
-            target_q_values = multi_step_returns + (self.gamma ** n_steps) * next_q_values * (1 - dones)
-
-        # Compute loss with importance sampling weights
-        td_error = q_values - target_q_values
-        loss = (weights * td_error.pow(2)).mean()
-
-        # Optimize the model
-        self.optimizer.zero_grad()
-        loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.policy_net.parameters(), max_norm=10)  # Gradient clipping
-        self.optimizer.step()
-
-        # Update priorities in replay buffer
-        self.replay_buffer.update_priorities(indices, td_error.abs().detach().numpy())
-
-        # Update epsilon
-        self.epsilon = max(self.epsilon_end, self.epsilon * self.epsilon_decay)
 
     def update_target_network(self):
         self.target_net.load_state_dict(self.policy_net.state_dict())

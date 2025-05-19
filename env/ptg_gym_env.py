@@ -159,15 +159,16 @@ class PTGEnv(gym.Env):
     def _initialize_observation_space(self):
         """Define observation space"""
         b_norm, b_enc = [0, 1], [-1, 1]     # Normalized lower and upper bounds [low, up]
-       
+        num_gas_eua = 3                     # Number of gas and EUA prices (before 12 hours, current, and in 24 hours)
+
         self.observation_space = spaces.Dict(
             {
                 "Elec_Price": spaces.Box(low=b_norm[0] * np.ones((self.el_price_ahead + self.el_price_past,)),
                                         high=b_norm[1] * np.ones((self.el_price_ahead + self.el_price_past,)), dtype=np.float64),
-                "Gas_Price": spaces.Box(low=b_norm[0] * np.ones((2,)),
-                                        high=b_norm[1] * np.ones((2,)), dtype=np.float64),
-                "EUA_Price": spaces.Box(low=b_norm[0] * np.ones((2,)),
-                                        high=b_norm[1] * np.ones((2,)), dtype=np.float64),
+                "Gas_Price": spaces.Box(low=b_norm[0] * np.ones((num_gas_eua,)),
+                                        high=b_norm[1] * np.ones((num_gas_eua,)), dtype=np.float64),
+                "EUA_Price": spaces.Box(low=b_norm[0] * np.ones((num_gas_eua,)),
+                                        high=b_norm[1] * np.ones((num_gas_eua,)), dtype=np.float64),
                 "METH_STATUS": spaces.Discrete(6),
                 "T_CAT": spaces.Box(low=b_norm[0], high=b_norm[1], shape=(self.seq_length,), dtype=np.float64),
                 "H2_in_MolarFlow": spaces.Box(low=b_norm[0], high=b_norm[1], shape=(self.seq_length,), dtype=np.float64),
@@ -175,8 +176,6 @@ class PTGEnv(gym.Env):
                 "H2_res_MolarFlow": spaces.Box(low=b_norm[0], high=b_norm[1], shape=(self.seq_length,), dtype=np.float64),
                 "H2O_DE_MassFlow": spaces.Box(low=b_norm[0], high=b_norm[1], shape=(self.seq_length,), dtype=np.float64),
                 "Elec_Heating": spaces.Box(low=b_norm[0], high=b_norm[1], shape=(self.seq_length,), dtype=np.float64),
-                "Temp_hour_enc_sin": spaces.Box(low=b_enc[0], high=b_enc[1], shape=(1,), dtype=np.float64),
-                "Temp_hour_enc_cos": spaces.Box(low=b_enc[0], high=b_enc[1], shape=(1,), dtype=np.float64),
             }
         )
         

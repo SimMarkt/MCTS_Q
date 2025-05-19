@@ -16,13 +16,10 @@ from gymnasium.envs.registration import registry, register
 import gymnasium as gym 
 
 # Libraries with utility functions and classes
-from src.rl_utils import load_data, initial_print, config_print, Preprocessing, Postprocessing, create_vec_envs#, create_vec_envs
-from src.rl_config_agent import AgentConfiguration
-from src.rl_config_env import EnvConfiguration
-from src.rl_config_train import TrainConfiguration
-
-from src.mctsq_config_dqn import DQN, DQNAgent
-from src.mctsq_config_mcts import MCTS
+from src.mctsq_utils import load_data, initial_print, config_print, Preprocessing, Postprocessing, create_envs
+from src.mctsq_config_env import EnvConfiguration
+from src.mctsq_config_train import TrainConfiguration
+from src.mctsq_config_mcts import MCTS_Q
 
 def computational_resources(TrainConfig):
     """
@@ -71,18 +68,17 @@ def check_env(env_id):
 def main():
     # --------------------------------------Initialize the RL configuration---------------------------------------
     initial_print()
-    AgentConfig = AgentConfiguration()
     EnvConfig = EnvConfiguration()
     TrainConfig = TrainConfiguration()
     computational_resources(TrainConfig)
-    str_id = config_print(AgentConfig, EnvConfig, TrainConfig)
+    str_id = config_print(EnvConfig, TrainConfig)
     
     # -----------------------------------------------Preprocessing------------------------------------------------
     print("Preprocessing...")
     dict_price_data, dict_op_data = load_data(EnvConfig, TrainConfig)
 
     # Initialize preprocessing with calculation of potential rewards and load identifiers
-    Preprocess = Preprocessing(dict_price_data, dict_op_data, AgentConfig, EnvConfig, TrainConfig)    
+    Preprocess = Preprocessing(dict_price_data, dict_op_data, EnvConfig, TrainConfig)    
     # Create dictionaries for kwargs of training and test environments
     env_kwargs_data = {'env_kwargs_train': Preprocess.dict_env_kwargs("train"),
                        'env_kwargs_val': Preprocess.dict_env_kwargs("val"),
@@ -92,43 +88,17 @@ def main():
     print("Load environment...")
     env_id = 'PtGEnv-v0'
     check_env(env_id)
-    dict_input, train_or_eval = "train", render_mode="None"
-    env_train = gym.make(env_id, env_kwargs_data['env_kwargs_train'], train_or_eval = "train")  # Create the training environment
-    env_eval = gym.make(env_id, env_kwargs_data['env_kwargs_val'], train_or_eval = "eval")  # Create the training environment
-    env_test_post = gym.make(env_id, env_kwargs_data['env_kwargs_test'], train_or_eval = "test")
-
-    tb_log = "tensorboard/" + str_id 
+    env_train, callback_val, env_test_post = create_envs(env_id, env_kwargs_data, TrainConfig)
     
     # ----------------------------------------------Initialize RL Model--------------------------------------------
-    print("Initializing RL model...")
-    state_dim = env_train.observation_space.shape[0]
-    action_dim = env_train.action_space.n
-    embed_dim = 64
-    hidden_units = 128
-
-    rl_agent = DQNAgent(
-        state_dim=state_dim,
-        action_dim=action_dim,
-        seq_length=10,  # Example sequence length
-        embed_dim=embed_dim,
-        hidden_units=hidden_units,
-        buffer_capacity=10000,
-        batch_size=64,
-        gamma=0.99,
-        lr=1e-3,
-        epsilon_start=1.0,
-        epsilon_end=0.1,
-        epsilon_decay=0.995,
-        encoder_type="conv"
-    )                                                                                   # Set path for tensorboard data (for monitoring RL training) 
+    print("Initializing the MCTS_Q model...")
+    model = MCTS_Q(env_train)
 
     # ----------------------------------------------MCTS with RL--------------------------------------------------
     print("Run MCTS with RL on the validation set... >>>", str_id, "<<< \n")
-    mcts = MCTS()
-    mcts.path = os.path.dirname(__file__)
+    model.learn(total_timesteps=TrainConfig["train_steps"], callback=[callback_val])
 
-    mcts.run_with_rl(env_train, env_test_post, EnvConfig, Preprocess.eps_sim_steps_test, rl_agent)  # Pass RL agent to MCTS
-    print("...finished MCTS validation\n")
+    print("...finished training!\n")
 
     # model.learn(total_timesteps=TrainConfig.train_steps, callback=[eval_callback_val])  # Evaluate the RL agent only on the validation set
 
@@ -137,11 +107,11 @@ def main():
     #     print("Save RL agent under ./logs/ ... \n") 
     #     AgentConfig.save_model(model)
     
-    # # ----------------------------------------------Post-processing-----------------------------------------------
-    # print("Postprocessing...")
-    # PostProcess = Postprocessing(str_id, AgentConfig, EnvConfig, TrainConfig, env_test_post, Preprocess)
-    # PostProcess.test_performance()
-    # PostProcess.plot_results()
+    # ----------------------------------------------Post-processing-----------------------------------------------
+    print("Postprocessing...")
+    PostProcess = Postprocessing(str_id, AgentConfig, EnvConfig, TrainConfig, env_test_post, Preprocess, model)
+    PostProcess.test_performance()
+    PostProcess.plot_results()
 
 if __name__ == '__main__':
     main()

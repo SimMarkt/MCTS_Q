@@ -25,7 +25,8 @@ batch_size : 64             # Batch size for training
 
 # Encoder hyperparameters
 encoder_type : "conv"       # Type of encoder used in the DQN model [Conv1D: "conv", GRU: "gru", Transformer: "transformer"]
-seq_length : 10             # Length of the sequence for time-series encoding
+seq_length : 30             # Length of the sequence for time-series encoding
+seq_step : 30               # Number of data steps in process data (2-Sec resolution) between two consequitive entries in the sequence (30 steps = 60 seconds)
 embed_dim : 64              # Dimension of the embedding layer
 
 # Additional settings

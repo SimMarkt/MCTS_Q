@@ -21,6 +21,8 @@ import torch.nn.functional as F
 from src.mctsq_config_dqn import DQNModel
 
 #TODO: Include random seeds
+#TODO: Include deterministic=True für validation and testing??
+#TODO: Write stats during training and evaluation into tensorboard file
 
 class MCTS_Q:
     def __init__(self, env_train):
@@ -58,7 +60,9 @@ class MCTS_Q:
             encoder_type=self.encoder_type
         )
 
-        self.action_type = "discrete" 
+        self.action_type = "discrete"
+
+        self.deterministic = False 
 
         self.str_alg = None          # Initialize the string for the algorithm settings (used for file identification)
         # Nested dictionary with hyperparameters, including abbreviation ('abb') and variable name ('var') 
@@ -106,24 +110,28 @@ class MCTS_Q:
             
             # Evaluate the policy
             if callback is not None:
-                if self.step % callback.interval == 0 and self.step != 0:
+                if self.step % callback.val_steps == 0 and self.step != 0:
                     state_call, _ = callback.env.reset()
                     cum_reward_call = 0 
 
                     for _ in range(callback.env.ep_length):
                         action_call = self.predict(callback.env)
-                        state_call, reward_call, terminated_call, _, _ = callback.env.step(action_call)
+                        _, reward_call, terminated_call, _, _ = callback.env.step(action_call)
                         cum_reward_call += reward_call
                         if terminated_call:
                             break
 
                     callback.stats.append(self.step, cum_reward_call)
+                    print(f" Validation: Cumulative Reward {cum_reward_call}")
+            
 
-    def predict(self, env):
+    def predict(self, env, deterministic=False):
         """
         Perform MCTS search to find the best action
         :param env: The environment to search in
         """
+        self.deterministic = deterministic
+
         root_env_copy = copy.deepcopy(env)
         root_node = MCTSNode(root_env_copy, maximum_depth=self.maximum_depth)
 

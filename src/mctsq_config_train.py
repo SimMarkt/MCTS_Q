@@ -29,6 +29,15 @@ class TrainConfiguration:
         self.seed_train = None              # Random seed for training
         self.seed_test = None               # Random seed for validation/testing
 
+        # Load the algorithm configuration from the YAML file
+        with open("config/config_mctsq.yaml", "r") as env_file:
+            mctsq_config = yaml.safe_load(env_file)
+
+        self.seq_length = mctsq_config["seq_length"]
+        self.seq_step = mctsq_config["seq_step"]
+
+        
+
 
 
 

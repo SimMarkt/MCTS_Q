@@ -17,6 +17,8 @@ ep_index = 0
 #   LHV: Lower heating value
 #   EEG: German Renewable Energy Act (Erneuerbare-Energien-Gesetz)
 
+#TODO: Normalize reward
+
 class PTGEnv(gym.Env):
     """Custom Environment implementing the Gymnasium interface for PtG dispatch optimization."""
 
@@ -155,50 +157,29 @@ class PTGEnv(gym.Env):
             assert False, f"ptg_gym_env.py error: invalid action type ({self.action_type}) - must match ['discrete', 'continuous']!"
 
     def _initialize_observation_space(self):
-        """Define observation space based on raw or modified economic data"""
+        """Define observation space"""
         b_norm, b_enc = [0, 1], [-1, 1]     # Normalized lower and upper bounds [low, up]
-
-        # Set observation space depending on raw/modified market data
-        if self.raw_modified == "raw":           
-            self.observation_space = spaces.Dict(
-                {
-                    "Elec_Price": spaces.Box(low=b_norm[0] * np.ones((self.price_ahead,)),
-                                            high=b_norm[1] * np.ones((self.price_ahead,)), dtype=np.float64),
-                    "Gas_Price": spaces.Box(low=b_norm[0] * np.ones((2,)),
-                                            high=b_norm[1] * np.ones((2,)), dtype=np.float64),
-                    "EUA_Price": spaces.Box(low=b_norm[0] * np.ones((2,)),
-                                            high=b_norm[1] * np.ones((2,)), dtype=np.float64),
-                    "METH_STATUS": spaces.Discrete(6),
-                    "T_CAT": spaces.Box(low=b_norm[0], high=b_norm[1], shape=(1,), dtype=np.float64),
-                    "H2_in_MolarFlow": spaces.Box(low=b_norm[0], high=b_norm[1], shape=(1,), dtype=np.float64),
-                    "CH4_syn_MolarFlow": spaces.Box(low=b_norm[0], high=b_norm[1], shape=(1,), dtype=np.float64),
-                    "H2_res_MolarFlow": spaces.Box(low=b_norm[0], high=b_norm[1], shape=(1,), dtype=np.float64),
-                    "H2O_DE_MassFlow": spaces.Box(low=b_norm[0], high=b_norm[1], shape=(1,), dtype=np.float64),
-                    "Elec_Heating": spaces.Box(low=b_norm[0], high=b_norm[1], shape=(1,), dtype=np.float64),
-                    "Temp_hour_enc_sin": spaces.Box(low=b_enc[0], high=b_enc[1], shape=(1,), dtype=np.float64),
-                    "Temp_hour_enc_cos": spaces.Box(low=b_enc[0], high=b_enc[1], shape=(1,), dtype=np.float64),
-                }
-            )
-        elif self.raw_modified == "mod":
-            self.observation_space = spaces.Dict(
-                {
-                    "Pot_Reward": spaces.Box(low=b_norm[0] * np.ones((self.price_ahead,)),
-                                            high=b_norm[1] * np.ones((self.price_ahead,)), dtype=np.float64),
-                    "Part_Full": spaces.Box(low=b_enc[0] * np.ones((self.price_ahead,)),
-                                            high=b_enc[1] * np.ones((self.price_ahead,)), dtype=np.float64),
-                    "METH_STATUS": spaces.Discrete(6),
-                    "T_CAT": spaces.Box(low=b_norm[0], high=b_norm[1], shape=(1,), dtype=np.float64),
-                    "H2_in_MolarFlow": spaces.Box(low=b_norm[0], high=b_norm[1], shape=(1,), dtype=np.float64),
-                    "CH4_syn_MolarFlow": spaces.Box(low=b_norm[0], high=b_norm[1], shape=(1,), dtype=np.float64),
-                    "H2_res_MolarFlow": spaces.Box(low=b_norm[0], high=b_norm[1], shape=(1,), dtype=np.float64),
-                    "H2O_DE_MassFlow": spaces.Box(low=b_norm[0], high=b_norm[1], shape=(1,), dtype=np.float64),
-                    "Elec_Heating": spaces.Box(low=b_norm[0], high=b_norm[1], shape=(1,), dtype=np.float64),
-                    "Temp_hour_enc_sin": spaces.Box(low=b_enc[0], high=b_enc[1], shape=(1,), dtype=np.float64),
-                    "Temp_hour_enc_cos": spaces.Box(low=b_enc[0], high=b_enc[1], shape=(1,), dtype=np.float64),
-                }
-            )
-        else:
-            assert False, f"ptg_gym_env.py error: state design raw_modified {self.raw_modified} must match 'raw' or 'mod'!"
+       
+        self.observation_space = spaces.Dict(
+            {
+                "Elec_Price": spaces.Box(low=b_norm[0] * np.ones((self.el_price_ahead + self.el_price_past,)),
+                                        high=b_norm[1] * np.ones((self.el_price_ahead + self.el_price_past,)), dtype=np.float64),
+                "Gas_Price": spaces.Box(low=b_norm[0] * np.ones((2,)),
+                                        high=b_norm[1] * np.ones((2,)), dtype=np.float64),
+                "EUA_Price": spaces.Box(low=b_norm[0] * np.ones((2,)),
+                                        high=b_norm[1] * np.ones((2,)), dtype=np.float64),
+                "METH_STATUS": spaces.Discrete(6),
+                "T_CAT": spaces.Box(low=b_norm[0], high=b_norm[1], shape=(self.seq_length,), dtype=np.float64),
+                "H2_in_MolarFlow": spaces.Box(low=b_norm[0], high=b_norm[1], shape=(self.seq_length,), dtype=np.float64),
+                "CH4_syn_MolarFlow": spaces.Box(low=b_norm[0], high=b_norm[1], shape=(self.seq_length,), dtype=np.float64),
+                "H2_res_MolarFlow": spaces.Box(low=b_norm[0], high=b_norm[1], shape=(self.seq_length,), dtype=np.float64),
+                "H2O_DE_MassFlow": spaces.Box(low=b_norm[0], high=b_norm[1], shape=(self.seq_length,), dtype=np.float64),
+                "Elec_Heating": spaces.Box(low=b_norm[0], high=b_norm[1], shape=(self.seq_length,), dtype=np.float64),
+                "Temp_hour_enc_sin": spaces.Box(low=b_enc[0], high=b_enc[1], shape=(1,), dtype=np.float64),
+                "Temp_hour_enc_cos": spaces.Box(low=b_enc[0], high=b_enc[1], shape=(1,), dtype=np.float64),
+            }
+        )
+        
 
     def _normalize_observations(self):
         """Normalize observations using standardization"""
@@ -215,25 +196,10 @@ class PTGEnv(gym.Env):
 
     def _get_obs(self):
         """Retrieve the current observations from the environment"""
-        if self.raw_modified == "raw":
             return {
                 "Elec_Price": np.array(self.el_n, dtype=np.float64),
                 "Gas_Price": np.array(self.gas_n, dtype=np.float64),
                 "EUA_Price": np.array(self.eua_n, dtype=np.float64),
-                "METH_STATUS": int(self.Meth_State),
-                "T_CAT": np.array([self.Meth_T_cat_n], dtype=np.float64),
-                "H2_in_MolarFlow": np.array([self.Meth_H2_flow_n], dtype=np.float64),
-                "CH4_syn_MolarFlow": np.array([self.Meth_CH4_flow_n], dtype=np.float64),
-                "H2_res_MolarFlow": np.array([self.Meth_H2_res_flow_n], dtype=np.float64),
-                "H2O_DE_MassFlow": np.array([self.Meth_H2O_flow_n], dtype=np.float64),
-                "Elec_Heating": np.array([self.Meth_el_heating_n], dtype=np.float64),
-                "Temp_hour_enc_sin": np.array([self.temp_h_enc_sin], dtype=np.float64),
-                "Temp_hour_enc_cos": np.array([self.temp_h_enc_cos], dtype=np.float64),
-            }
-        else:
-            return {
-                "Pot_Reward": np.array(self.pot_rew_n, dtype=np.float64),
-                "Part_Full": np.array(self.e_r_b_act[2, :], dtype=np.float64),
                 "METH_STATUS": int(self.Meth_State),
                 "T_CAT": np.array([self.Meth_T_cat_n], dtype=np.float64),
                 "H2_in_MolarFlow": np.array([self.Meth_H2_flow_n], dtype=np.float64),

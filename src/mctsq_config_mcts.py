@@ -23,6 +23,7 @@ from src.mctsq_config_dqn import DQNModel
 #TODO: Include random seeds
 #TODO: Include deterministic=True für validation and testing??
 #TODO: Write stats during training and evaluation into tensorboard file
+#TODO: Include auto exploration adjustment
 
 class MCTS_Q:
     def __init__(self, env_train, seed):
@@ -41,14 +42,20 @@ class MCTS_Q:
 
         self.env_train = env_train
 
+        # Load the environment configuration from the YAML file
+        with open("config/config_env.yaml", "r") as env_file:
+            env_config = yaml.safe_load(env_file)
+
+        el_input_dim = env_config["price_ahead"] + env_config["price_past"]   # Input dimension for the electricity price
+        gas_eua_input_dim = 3
+
         # Initialize the DQN model
-        state_dim = env_train.observation_space.shape[0]
         action_dim = env_train.action_space.n
 
         self.dqn = DQNModel(
-            el_input_dim=, 
-            process_input_dim=, 
-            gas_eua_input_dim=, 
+            el_input_dim=el_input_dim, 
+            process_input_dim=self.seq_length, 
+            gas_eua_input_dim=gas_eua_input_dim, 
             action_dim=action_dim, 
             embed_dim=self.embed_dim,
             hidden_layers=self.hidden_layers,

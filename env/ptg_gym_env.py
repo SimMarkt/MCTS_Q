@@ -120,12 +120,16 @@ class PTGEnv(gym.Env):
         self.part_op = 'op1_start_p'                                # Track partial load conditions
         self.full = self.op2_start_f                                # Current full load data set
         self.full_op = 'op2_start_f'                                # Track full load conditions
-        self.Meth_T_cat = 16                                        # Initial catalyst temperature [°C]     #################self.seq_length
+        self.Meth_T_cat = 16                                        # Initial catalyst temperature [°C] 
         self.i = self._get_index(self.cooldown, self.Meth_T_cat)    # Index for operation
         self.j = 0                                                  # Step counter for operation
-        self.op = self.cooldown[self.i, :]                          # Current operation point
-        keys = ['H2_flow', 'CH4_flow', 'H2_res_flow', 'H2O_flow', 'el_heating']                             #################self.seq_length
+        self.op = self.cooldown[self.i, :]                          # Current operation point               
+        keys = ['H2_flow', 'CH4_flow', 'H2_res_flow', 'H2O_flow', 'el_heating'] 
         for i, key in enumerate(keys, start=2): setattr(self, f'Meth_{key}', self.op[i])
+        self.op_seq = np.ones((self.seq_length, len(keys))) * self.op               # Broadcasts vector across rows
+        print("TEST self.op_seq", self.op_seq)                           
+        for i, key in enumerate(keys, start=2): setattr(self, f'Meth_{key}_seq', self.op_seq[:, i])
+        print("TEST self.Meth_T_cat_seq", self.Meth_T_cat_seq) 
         self.hot_cold = 0                   # Detect startup conditions (0=cold, 1=hot)
         self.state_change = False           # Track changes in methanation state Meth_State
         self.r_0 = self.reward_level[0]     # Reward level
@@ -190,12 +194,12 @@ class PTGEnv(gym.Env):
         self.el_n = (self.e_r_b_act[0, :] - self.el_l_b) / (self.el_u_b - self.el_l_b)
         self.gas_n = (self.gas_eua_price_d[0, :] - self.gas_l_b) / (self.gas_u_b - self.gas_l_b)
         self.eua_n = (self.gas_eua_price_d[1, :] - self.eua_l_b) / (self.eua_u_b - self.eua_l_b)
-        self.Meth_T_cat_n = (self.Meth_T_cat - self.T_l_b) / (self.T_u_b - self.T_l_b)
-        self.Meth_H2_flow_n = (self.Meth_H2_flow - self.h2_l_b) / (self.h2_u_b - self.h2_l_b)
-        self.Meth_CH4_flow_n = (self.Meth_CH4_flow - self.ch4_l_b) / (self.ch4_u_b - self.ch4_l_b)
-        self.Meth_H2_res_flow_n = (self.Meth_H2_res_flow - self.h2_res_l_b) / (self.h2_res_u_b - self.h2_res_l_b)
-        self.Meth_H2O_flow_n = (self.Meth_H2O_flow - self.h2o_l_b) / (self.h2o_u_b - self.h2o_l_b)
-        self.Meth_el_heating_n = (self.Meth_el_heating - self.heat_l_b) / (self.heat_u_b - self.heat_l_b)
+        self.Meth_T_cat_n = (self.Meth_T_cat_seq - self.T_l_b) / (self.T_u_b - self.T_l_b)
+        self.Meth_H2_flow_n = (self.Meth_H2_flow_seq - self.h2_l_b) / (self.h2_u_b - self.h2_l_b)
+        self.Meth_CH4_flow_n = (self.Meth_CH4_flow_seq - self.ch4_l_b) / (self.ch4_u_b - self.ch4_l_b)
+        self.Meth_H2_res_flow_n = (self.Meth_H2_res_flow_seq - self.h2_res_l_b) / (self.h2_res_u_b - self.h2_res_l_b)
+        self.Meth_H2O_flow_n = (self.Meth_H2O_flow_seq - self.h2o_l_b) / (self.h2o_u_b - self.h2o_l_b)
+        self.Meth_el_heating_n = (self.Meth_el_heating_seq - self.heat_l_b) / (self.heat_u_b - self.heat_l_b)
 
     def _get_obs(self):
         """Retrieve the current observations from the environment"""
@@ -427,6 +431,17 @@ class PTGEnv(gym.Env):
         self.Meth_H2_res_flow = np.average(self.op[:, 4])
         self.Meth_H2O_flow = np.average(self.op[:, 5])
         self.Meth_el_heating = np.average(self.op[:, 6])
+
+        # Store past process data sequence
+        # For each column, sample backwards from the last entry
+        self.op_seq = np.array([self.op[::-1, col][::self.seq_step][:self.seq_length] for col in range(self.op.shape[1])]).T
+        print("TEST2 self.op_seq", self.op_seq)
+        self.Meth_T_cat_seq = self.op_seq[:, 1]
+        self.Meth_H2_flow_seq = self.op_seq[:, 2]
+        self.Meth_CH4_flow_seq = self.op_seq[:, 3]
+        self.Meth_H2_res_flow_seq = self.op_seq[:, 4]
+        self.Meth_H2O_flow_seq = self.op_seq[:, 5]
+        self.Meth_el_heating_seq = self.op_seq[:, 6]
 
         self._normalize_observations()
 

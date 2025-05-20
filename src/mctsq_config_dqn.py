@@ -38,38 +38,30 @@ def add_time_features_to_gas_eua(data, hours_offsets=[-12, 0, 12]):
     time_features = np.broadcast_to(time_features, (batch, 3, 2))
     return np.concatenate([data, time_features], axis=-1)
 
-# ConvAttentionBlock
+# --- ConvAttentionEnc ---
 class ConvAttentionEnc(nn.Module):
     def __init__(self, input_dim, embed_dim):
         super(ConvAttentionEnc, self).__init__()
         self.conv1 = nn.Conv1d(in_channels=input_dim, out_channels=embed_dim, kernel_size=3, padding=1)
         self.conv2 = nn.Conv1d(in_channels=embed_dim, out_channels=embed_dim, kernel_size=3, padding=1)
-        self.attention_weights = nn.Conv1d(in_channels=embed_dim, out_channels=1, kernel_size=1)  # Attention scores
+        self.attention_weights = nn.Conv1d(in_channels=embed_dim, out_channels=1, kernel_size=1)
         self.norm = nn.LayerNorm(embed_dim)
 
     def forward(self, x):
-        # x shape: (batch_size, input_dim, seq_length)
+        # x shape: (batch_size, seq_length, input_dim)
+        x = x.permute(0, 2, 1)  # (batch_size, input_dim, seq_length)
         x = self.conv1(x)
         x = F.relu(x)
         x = self.conv2(x)
         x = F.relu(x)
-
-        # Compute attention scores
         scores = self.attention_weights(x)  # (batch_size, 1, seq_length)
-        scores = F.softmax(scores, dim=-1)  # Normalize scores across the sequence dimension
-
-        # Apply attention weights
-        x = x * scores  # Element-wise multiplication (batch_size, embed_dim, seq_length)
-
-        # Aggregate along the sequence dimension
-        x = x.sum(dim=-1)  # Weighted sum (batch_size, embed_dim)
-
-        # Apply layer normalization
+        scores = F.softmax(scores, dim=-1)
+        x = x * scores
+        x = x.sum(dim=-1)
         x = self.norm(x)
-
         return x
 
-# GRUAttentionBlock
+# --- GRUAttentionEnc ---
 class GRUAttentionEnc(nn.Module):
     def __init__(self, input_dim, embed_dim):
         super(GRUAttentionEnc, self).__init__()
@@ -79,45 +71,33 @@ class GRUAttentionEnc(nn.Module):
 
     def forward(self, x):
         # x shape: (batch_size, seq_length, input_dim)
-        gru_output, _ = self.gru(x)  # (batch_size, seq_length, embed_dim)
-
-        # Compute attention scores
-        scores = self.attention_weights(gru_output).squeeze(-1)  # (batch_size, seq_length)
-        scores = F.softmax(scores, dim=-1)  # Normalize scores across the sequence dimension
-
-        # Apply attention weights
-        attended = torch.bmm(scores.unsqueeze(1), gru_output).squeeze(1)  # (batch_size, embed_dim)
-
-        # Apply layer normalization
+        gru_output, _ = self.gru(x)
+        scores = self.attention_weights(gru_output).squeeze(-1)
+        scores = F.softmax(scores, dim=-1)
+        attended = torch.bmm(scores.unsqueeze(1), gru_output).squeeze(1)
         attended = self.norm(attended)
-
         return attended
 
-# TransformerBlock
+# --- TransformerEnc ---
 class TransformerEnc(nn.Module):
     def __init__(self, input_dim, embed_dim, num_heads, num_layers):
         super(TransformerEnc, self).__init__()
         self.embedding = nn.Linear(input_dim, embed_dim)
-        self.positional_encoding = nn.Parameter(torch.zeros(1, 500, embed_dim))  # Max sequence length = 500
+        self.positional_encoding = nn.Parameter(torch.zeros(1, 500, embed_dim))
         encoder_layer = nn.TransformerEncoderLayer(embed_dim, num_heads)
         self.transformer = nn.TransformerEncoder(encoder_layer, num_layers)
         self.norm = nn.LayerNorm(embed_dim)
 
     def forward(self, x):
         # x shape: (batch_size, seq_length, input_dim)
-        x = self.embedding(x)  # (batch_size, seq_length, embed_dim)
-        x = x + self.positional_encoding[:, :x.size(1), :]  # Add positional encoding
-
-        # Transformer encoder
-        x = self.transformer(x.permute(1, 0, 2))  # (seq_length, batch_size, embed_dim)
-        x = x.mean(dim=0)  # Aggregate along the sequence dimension (batch_size, embed_dim)
-
-        # Apply layer normalization
+        x = self.embedding(x)
+        x = x + self.positional_encoding[:, :x.size(1), :]
+        x = self.transformer(x.permute(1, 0, 2))
+        x = x.mean(dim=0)
         x = self.norm(x)
-
         return x
 
-# Small encoder for gas/EUA price (MLP or GRU)
+# --- GasEUAEncoder ---
 class GasEUAEncoder(nn.Module):
     def __init__(self, input_dim, embed_dim, encoder_type="mlp"):
         super(GasEUAEncoder, self).__init__()
@@ -132,11 +112,17 @@ class GasEUAEncoder(nn.Module):
         elif encoder_type == "gru":
             self.encoder = GRUAttentionEnc(input_dim, embed_dim)
             self.flatten = False
+        elif encoder_type == "conv":
+            self.encoder = ConvAttentionEnc(input_dim, embed_dim)
+            self.flatten = False
+        elif encoder_type == "transformer":
+            self.encoder = TransformerEnc(input_dim, embed_dim, num_heads=4, num_layers=2)
+            self.flatten = False
         else:
             raise ValueError("Invalid gas/EUA encoder type.")
 
     def forward(self, x):
-        # x: (batch, 3, input_dim)
+        # x: (batch, seq_length, input_dim)
         if self.flatten:
             x = x.view(x.size(0), -1)
         return self.encoder(x)
@@ -149,13 +135,14 @@ def get_activation(activation_name):
     else:
         raise ValueError(f"Unsupported activation function: {activation_name}")
 
+# --- TripleEncoderDQN ---
 class TripleEncoderDQN(nn.Module):
     """
     DQN with three parallel encoders for different time-series modalities.
     """
     def __init__(
         self,
-        el_input_dim, gas_eua_input_dim, process_input_dim, 
+        el_input_dim, process_input_dim, gas_eua_input_dim,  
         embed_dim, hidden_layers, hidden_units, action_dim,
         price_encoder_type="conv", process_encoder_type="gru", gas_eua_encoder_type="mlp",
         activation="relu"
@@ -200,9 +187,9 @@ class TripleEncoderDQN(nn.Module):
                 price_step_minutes=15, process_step_minutes=15, 
                 price_start_minute=0, process_start_minute=0, 
                 gas_eua_hours_offsets=[-12, 0, 12]):
-        # price_data: (batch, price_seq_len, el_input_dim)
-        # process_data: (batch, process_seq_len, process_input_dim)
-        # gas_eua_data: (batch, 3, gas_eua_input_dim)
+        # price_data: (batch, seq_len, el_input_dim)
+        # process_data: (batch, seq_len, process_input_dim)
+        # gas_eua_data: (batch, seq_len, gas_eua_input_dim)
 
         # Add temporal features (convert to numpy if needed)
         if isinstance(price_data, torch.Tensor):
@@ -226,19 +213,8 @@ class TripleEncoderDQN(nn.Module):
         gas_eua_data_np = add_time_features_to_gas_eua(gas_eua_data_np, gas_eua_hours_offsets)
         gas_eua_data = torch.FloatTensor(gas_eua_data_np).to(gas_eua_data.device if isinstance(gas_eua_data, torch.Tensor) else 'cpu')
 
-        # Adjust input shape for encoders if needed
-        if isinstance(self.price_encoder, ConvAttentionEnc):
-            price_data = price_data.permute(0, 2, 1)  # (batch, input_dim, seq_len)
-            price_feat = self.price_encoder(price_data)
-        else:
-            price_feat = self.price_encoder(price_data)
-
-        if isinstance(self.process_encoder, ConvAttentionEnc):
-            process_data = process_data.permute(0, 2, 1)
-            process_feat = self.process_encoder(process_data)
-        else:
-            process_feat = self.process_encoder(process_data)
-
+        price_feat = self.price_encoder(price_data)
+        process_feat = self.process_encoder(process_data)
         gas_eua_feat = self.gas_eua_encoder(gas_eua_data)
 
         combined = torch.cat([price_feat, process_feat, gas_eua_feat], dim=-1)
@@ -305,13 +281,13 @@ class DQNModel:
         self.epsilon_decay = epsilon_decay
 
         self.policy_net = TripleEncoderDQN(
-            el_input_dim, gas_eua_input_dim, process_input_dim, 
+            el_input_dim, process_input_dim, gas_eua_input_dim,
             embed_dim, hidden_layers, hidden_units, action_dim,
             price_encoder_type, process_encoder_type, gas_eua_encoder_type,
             activation
         )
         self.target_net = TripleEncoderDQN(
-            el_input_dim, gas_eua_input_dim, process_input_dim, 
+            el_input_dim, process_input_dim, gas_eua_input_dim,
             embed_dim, hidden_layers, hidden_units, action_dim,
             price_encoder_type, process_encoder_type, gas_eua_encoder_type,
             activation
@@ -340,28 +316,71 @@ class DQNModel:
         batch = self.replay_buffer.sample(self.batch_size)
         states, actions, rewards, next_states, dones, weights, indices = batch
 
-        price_states = np.array([s[0] for s in states])
-        process_states = np.array([s[1] for s in states])
-        next_price_states = np.array([ns[0] for ns in next_states])
-        next_process_states = np.array([ns[1] for ns in next_states])
+        # "Elec_Price": spaces.Box(low=b_norm[0] * np.ones((self.el_price_ahead + self.el_price_past,)),
+        #                                 high=b_norm[1] * np.ones((self.el_price_ahead + self.el_price_past,)), dtype=np.float64),
+        #         "Gas_Price": spaces.Box(low=b_norm[0] * np.ones((self.num_gas_eua,)),
+        #                                 high=b_norm[1] * np.ones((self.num_gas_eua,)), dtype=np.float64),
+        #         "EUA_Price": spaces.Box(low=b_norm[0] * np.ones((self.num_gas_eua,)),
+        #                                 high=b_norm[1] * np.ones((self.num_gas_eua,)), dtype=np.float64),
+        #         "T_CAT": spaces.Box(low=b_norm[0], high=b_norm[1], shape=(self.seq_length,), dtype=np.float64),
+        #         "H2_in_MolarFlow": spaces.Box(low=b_norm[0], high=b_norm[1], shape=(self.seq_length,), dtype=np.float64),
+        #         "CH4_syn_MolarFlow": spaces.Box(low=b_norm[0], high=b_norm[1], shape=(self.seq_length,), dtype=np.float64),
+        #         "H2_res_MolarFlow": spaces.Box(low=b_norm[0], high=b_norm[1], shape=(self.seq_length,), dtype=np.float64),
+        #         "H2O_DE_MassFlow": spaces.Box(low=b_norm[0], high=b_norm[1], shape=(self.seq_length,), dtype=np.float64),
+        #         "Elec_Heating": spaces.Box(low=b_norm[0], high=b_norm[1], shape=(self.seq_length,), dtype=np.float64),
+        #     }
+        
+        # {
+        #     "Elec_Price": np.array(self.el_n, dtype=np.float64),
+        #     "Gas_Price": np.array(self.gas_n, dtype=np.float64),
+        #     "EUA_Price": np.array(self.eua_n, dtype=np.float64),
+        #     "T_CAT": np.array([self.Meth_T_cat_n], dtype=np.float64),
+        #     "H2_in_MolarFlow": np.array([self.Meth_H2_flow_n], dtype=np.float64),
+        #     "CH4_syn_MolarFlow": np.array([self.Meth_CH4_flow_n], dtype=np.float64),
+        #     "H2_res_MolarFlow": np.array([self.Meth_H2_res_flow_n], dtype=np.float64),
+        #     "H2O_DE_MassFlow": np.array([self.Meth_H2O_flow_n], dtype=np.float64),
+        #     "Elec_Heating": np.array([self.Meth_el_heating_n], dtype=np.float64),
+        # }
+
+        price_states = np.array([s["Elec_Price"] for s in states])
+        process_states = np.array([
+            np.concatenate([s["T_CAT"], s["H2_in_MolarFlow"], s["CH4_syn_MolarFlow"], s["H2_res_MolarFlow"], s["H2O_DE_MassFlow"], s["Elec_Heating"]])
+            for s in states
+        ])
+        gas_eua_states = np.array([
+            np.concatenate([s["Gas_Price"], s["EUA_Price"]])
+            for s in states
+        ])
+        next_price_states = np.array([s["Elec_Price"] for s in next_states])
+        next_process_states = np.array([
+            np.concatenate([s["T_CAT"], s["H2_in_MolarFlow"], s["CH4_syn_MolarFlow"], s["H2_res_MolarFlow"], s["H2O_DE_MassFlow"], s["Elec_Heating"]])
+            for s in next_states
+        ])
+        next_gas_eua_states = np.array([
+            np.concatenate([s["Gas_Price"], s["EUA_Price"]])
+            for s in next_states
+        ])
+        
 
         price_states = torch.FloatTensor(price_states)
         process_states = torch.FloatTensor(process_states)
+        gas_eua_states = torch.FloatTensor(gas_eua_states)
         next_price_states = torch.FloatTensor(next_price_states)
         next_process_states = torch.FloatTensor(next_process_states)
+        next_gas_eua_states = torch.FloatTensor(next_gas_eua_states)
         actions = torch.LongTensor(actions)
         rewards = torch.FloatTensor(rewards)
         dones = torch.FloatTensor(dones)
 
         # Compute Q values
-        q_values = self.policy_net(price_states, process_states).gather(1, actions.unsqueeze(1)).squeeze(1)
+        q_values = self.policy_net(price_states, process_states, gas_eua_states).gather(1, actions.unsqueeze(1)).squeeze(1)
 
         # Compute target Q values with multi-step returns
         n_steps = 3
-        multi_step_returns = self.compute_multi_step_return(rewards, next_price_states, next_process_states, dones, n_steps)
+        multi_step_returns = self.compute_multi_step_return(rewards, next_price_states, next_process_states, next_gas_eua_states, dones, n_steps)
         with torch.no_grad():
-            next_q_values_policy = self.policy_net(next_price_states, next_process_states).max(1)[0]
-            next_q_values_target = self.target_net(next_price_states, next_process_states).max(1)[0]
+            next_q_values_policy = self.policy_net(next_price_states, next_process_states, next_gas_eua_states).max(1)[0]
+            next_q_values_target = self.target_net(next_price_states, next_process_states, next_gas_eua_states).max(1)[0]
             next_q_values = 0.5 * (next_q_values_policy + next_q_values_target)
             target_q_values = multi_step_returns + (self.gamma ** n_steps) * next_q_values * (1 - dones)
 

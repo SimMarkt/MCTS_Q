@@ -17,7 +17,8 @@ ep_index = 0
 #   LHV: Lower heating value
 #   EEG: German Renewable Energy Act (Erneuerbare-Energien-Gesetz)
 
-#TODO: Normalize reward
+#TODO: Include Meth_State and/or Action history in the observation space
+#TODO: Perhaps include temporal encoding in the observation space (sin/cos for minute within hour and hour within day)
 
 class PTGEnv(gym.Env):
     """Custom Environment implementing the Gymnasium interface for PtG dispatch optimization."""
@@ -65,6 +66,7 @@ class PTGEnv(gym.Env):
         self.step_size = int(self.time_step_size_sim / self.time_step_op)
         self.clock_hours = 0 * self.time_step_size_sim / 3600   # in [h]
         self.clock_days = self.clock_hours / 24                 # in [d]
+        self.num_gas_eua = 3                     # Number of gas and EUA prices (before 12 hours, current, and in 24 hours)
 
         self._initialize_datasets()
         self._initialize_op_rew()
@@ -86,7 +88,7 @@ class PTGEnv(gym.Env):
         #           historical values = No. of values in the electricity price data set
         # e.g. e_r_b_train[0, 5, 156] represents the future value of the electricity price [0,-,-] in
         # 5 hours [-,5,-] at the 156ths entry of the electricity price data set
-        self.e_r_b_act = self.e_r_b[:, :, self.act_ep_h]  # current values
+        self.el_act = self.e_r_b[0, :, self.act_ep_h]  # current electricity price values
 
         # self.g_e: np.array that stores gas and EUA price data
         #       Dimensions = [Type of data] x [No. of day-ahead values] x [historical values]
@@ -94,12 +96,12 @@ class PTGEnv(gym.Env):
         #           No. of day-ahead values = 2 (today and tomorrow)
         self.g_e_act = self.g_e[:, :, self.act_ep_d]  # current values
 
-        self.e_r_b_act = self.e_r_b[:, :, self.act_ep_h]
-        self.g_e_act = self.g_e[:, :, self.act_ep_d]
+        self.el_act = self.e_r_b[0, :, self.act_ep_h]            #################self.el_price_ahead + self.el_price_past,
+        self.g_e_act = self.g_e[:, :, self.act_ep_d]                #################self.num_gas_eua
 
-        # Temporal encoding for time step within an hour (sine-cosine transformation)
-        self.temp_h_enc_sin = math.sin(2 * math.pi * self.clock_hours)
-        self.temp_h_enc_cos = math.cos(2 * math.pi * self.clock_hours)
+        # # Temporal encoding for time step within an hour (sine-cosine transformation)
+        # self.temp_h_enc_sin = math.sin(2 * math.pi * self.clock_hours)
+        # self.temp_h_enc_cos = math.cos(2 * math.pi * self.clock_hours)
 
     def _initialize_op_rew(self):
         """Initialize methanation operation and reward constituents"""
@@ -113,11 +115,11 @@ class PTGEnv(gym.Env):
         self.part_op = 'op1_start_p'                                # Track partial load conditions
         self.full = self.op2_start_f                                # Current full load data set
         self.full_op = 'op2_start_f'                                # Track full load conditions
-        self.Meth_T_cat = 16                                        # Initial catalyst temperature [°C]
+        self.Meth_T_cat = 16                                        # Initial catalyst temperature [°C]     #################self.seq_length
         self.i = self._get_index(self.cooldown, self.Meth_T_cat)    # Index for operation
         self.j = 0                                                  # Step counter for operation
         self.op = self.cooldown[self.i, :]                          # Current operation point
-        keys = ['H2_flow', 'CH4_flow', 'H2_res_flow', 'H2O_flow', 'el_heating']
+        keys = ['H2_flow', 'CH4_flow', 'H2_res_flow', 'H2O_flow', 'el_heating']                             #################self.seq_length
         for i, key in enumerate(keys, start=2): setattr(self, f'Meth_{key}', self.op[i])
         self.hot_cold = 0                   # Detect startup conditions (0=cold, 1=hot)
         self.state_change = False           # Track changes in methanation state Meth_State
@@ -158,18 +160,16 @@ class PTGEnv(gym.Env):
 
     def _initialize_observation_space(self):
         """Define observation space"""
-        b_norm, b_enc = [0, 1], [-1, 1]     # Normalized lower and upper bounds [low, up]
-        num_gas_eua = 3                     # Number of gas and EUA prices (before 12 hours, current, and in 24 hours)
-
+        b_norm = [0, 1]     # Normalized lower and upper bounds [low, up]
+        
         self.observation_space = spaces.Dict(
             {
                 "Elec_Price": spaces.Box(low=b_norm[0] * np.ones((self.el_price_ahead + self.el_price_past,)),
                                         high=b_norm[1] * np.ones((self.el_price_ahead + self.el_price_past,)), dtype=np.float64),
-                "Gas_Price": spaces.Box(low=b_norm[0] * np.ones((num_gas_eua,)),
-                                        high=b_norm[1] * np.ones((num_gas_eua,)), dtype=np.float64),
-                "EUA_Price": spaces.Box(low=b_norm[0] * np.ones((num_gas_eua,)),
-                                        high=b_norm[1] * np.ones((num_gas_eua,)), dtype=np.float64),
-                "METH_STATUS": spaces.Discrete(6),
+                "Gas_Price": spaces.Box(low=b_norm[0] * np.ones((self.num_gas_eua,)),
+                                        high=b_norm[1] * np.ones((self.num_gas_eua,)), dtype=np.float64),
+                "EUA_Price": spaces.Box(low=b_norm[0] * np.ones((self.num_gas_eua,)),
+                                        high=b_norm[1] * np.ones((self.num_gas_eua,)), dtype=np.float64),
                 "T_CAT": spaces.Box(low=b_norm[0], high=b_norm[1], shape=(self.seq_length,), dtype=np.float64),
                 "H2_in_MolarFlow": spaces.Box(low=b_norm[0], high=b_norm[1], shape=(self.seq_length,), dtype=np.float64),
                 "CH4_syn_MolarFlow": spaces.Box(low=b_norm[0], high=b_norm[1], shape=(self.seq_length,), dtype=np.float64),
@@ -179,11 +179,10 @@ class PTGEnv(gym.Env):
             }
         )
         
-
     def _normalize_observations(self):
         """Normalize observations using standardization"""
-        self.pot_rew_n = (self.e_r_b_act[1, :] - self.rew_l_b) / (self.rew_u_b - self.rew_l_b)
-        self.el_n = (self.e_r_b_act[0, :] - self.el_l_b) / (self.el_u_b - self.el_l_b)
+        self.pot_rew_n = (self.el_act[1, :] - self.rew_l_b) / (self.rew_u_b - self.rew_l_b)
+        self.el_n = (self.el_act[0, :] - self.el_l_b) / (self.el_u_b - self.el_l_b)
         self.gas_n = (self.g_e_act[0, :] - self.gas_l_b) / (self.gas_u_b - self.gas_l_b)
         self.eua_n = (self.g_e_act[1, :] - self.eua_l_b) / (self.eua_u_b - self.eua_l_b)
         self.Meth_T_cat_n = (self.Meth_T_cat - self.T_l_b) / (self.T_u_b - self.T_l_b)
@@ -195,26 +194,23 @@ class PTGEnv(gym.Env):
 
     def _get_obs(self):
         """Retrieve the current observations from the environment"""
-            return {
-                "Elec_Price": np.array(self.el_n, dtype=np.float64),
-                "Gas_Price": np.array(self.gas_n, dtype=np.float64),
-                "EUA_Price": np.array(self.eua_n, dtype=np.float64),
-                "METH_STATUS": int(self.Meth_State),
-                "T_CAT": np.array([self.Meth_T_cat_n], dtype=np.float64),
-                "H2_in_MolarFlow": np.array([self.Meth_H2_flow_n], dtype=np.float64),
-                "CH4_syn_MolarFlow": np.array([self.Meth_CH4_flow_n], dtype=np.float64),
-                "H2_res_MolarFlow": np.array([self.Meth_H2_res_flow_n], dtype=np.float64),
-                "H2O_DE_MassFlow": np.array([self.Meth_H2O_flow_n], dtype=np.float64),
-                "Elec_Heating": np.array([self.Meth_el_heating_n], dtype=np.float64),
-                "Temp_hour_enc_sin": np.array([self.temp_h_enc_sin], dtype=np.float64),
-                "Temp_hour_enc_cos": np.array([self.temp_h_enc_cos], dtype=np.float64),
-            }
+        return {
+            "Elec_Price": np.array(self.el_n, dtype=np.float64),
+            "Gas_Price": np.array(self.gas_n, dtype=np.float64),
+            "EUA_Price": np.array(self.eua_n, dtype=np.float64),
+            "T_CAT": np.array([self.Meth_T_cat_n], dtype=np.float64),
+            "H2_in_MolarFlow": np.array([self.Meth_H2_flow_n], dtype=np.float64),
+            "CH4_syn_MolarFlow": np.array([self.Meth_CH4_flow_n], dtype=np.float64),
+            "H2_res_MolarFlow": np.array([self.Meth_H2_res_flow_n], dtype=np.float64),
+            "H2O_DE_MassFlow": np.array([self.Meth_H2O_flow_n], dtype=np.float64),
+            "Elec_Heating": np.array([self.Meth_el_heating_n], dtype=np.float64),
+        }
 
     def _get_info(self):
         """Retrieve additional details or metadata about the environment"""
         return {
             "step": self.k,
-            "el_price_act": self.e_r_b_act[0, 0],
+            "el_price_act": self.el_act[0, 0],
             "gas_price_act": self.g_e_act[0, 0],
             "eua_price_act": self.g_e_act[1, 0],
             "Meth_State": self.Meth_State,
@@ -235,8 +231,8 @@ class PTGEnv(gym.Env):
             "water_costs [ct/h]": -self.water_costs,
             "reward [ct]": self.rew,
             "cum_reward": self.cum_rew,
-            "Pot_Reward": self.e_r_b_act[1, 0],
-            "Part_Full": self.e_r_b_act[2, 0],
+            "Pot_Reward": self.el_act[1, 0],
+            "Part_Full": self.el_act[2, 0],
         }
 
     def _get_reward(self):
@@ -269,7 +265,7 @@ class PTGEnv(gym.Env):
 
         # Linear regression model for LHV efficiency of a 6 MW electrolyzer
         # Costs for electricity:
-        self.elec_costs_heating = self.Meth_el_heating / 1000 * self.e_r_b_act[0, 0]    # Electricity costs for methanation heating in [ct/h]
+        self.elec_costs_heating = self.Meth_el_heating / 1000 * self.el_act[0, 0]    # Electricity costs for methanation heating in [ct/h]
         self.load_elec = self.h2_volumeflow / self.max_h2_volumeflow                    # Electrolyzer load
         if self.load_elec < self.min_load_electrolyzer:
             self.eta_electrolyzer = 0.02
@@ -278,7 +274,7 @@ class PTGEnv(gym.Env):
                                      0.01 * self.load_elec ** (-1) - 1.68 * 10 ** (-3) * self.load_elec ** (-2) +
                                      2.51 * 10 ** (-5) * self.load_elec ** (-3))
         self.elec_costs_electrolyzer = self.h2_volumeflow * self.H_u_H2 * 1000 / self.eta_electrolyzer * \
-                                       self.e_r_b_act[0, 0]                             # Electricity costs for water electrolysis in [ct/h]
+                                       self.el_act[0, 0]                             # Electricity costs for water electrolysis in [ct/h]
         self.elec_costs = self.elec_costs_heating + self.elec_costs_electrolyzer
 
         # Costs for water consumption:
@@ -293,7 +289,9 @@ class PTGEnv(gym.Env):
 
         if self.state_change == True: self.rew -= self.r_0 * self.state_change_penalty
 
-        return self.rew
+        rew_norm = (self.rew - self.rew_l_b) / (self.rew_u_b - self.rew_l_b)  # Normalize reward
+
+        return rew_norm
 
     def step(self, action):
         k = self.k
@@ -405,11 +403,11 @@ class PTGEnv(gym.Env):
         self.clock_days = self.clock_hours / 24
         h_step = math.floor(self.clock_hours)
         d_step = math.floor(self.clock_days)
-        self.e_r_b_act = self.e_r_b[:, :, self.act_ep_h + h_step]
+        self.el_act = self.e_r_b[0, :, self.act_ep_h + h_step]
         self.g_e_act = self.g_e[:, :, self.act_ep_d + d_step]
 
-        self.temp_h_enc_sin = math.sin(2 * math.pi * self.clock_hours)
-        self.temp_h_enc_cos = math.cos(2 * math.pi * self.clock_hours)
+        # self.temp_h_enc_sin = math.sin(2 * math.pi * self.clock_hours)
+        # self.temp_h_enc_cos = math.cos(2 * math.pi * self.clock_hours)
 
         self.Meth_T_cat = self.op[-1, 1]    # Last value in self.op equals the new catalyst temperature
         # Average the species flow and electric heating values over the simulation time step

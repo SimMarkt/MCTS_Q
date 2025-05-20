@@ -66,7 +66,8 @@ class PTGEnv(gym.Env):
         self.step_size = int(self.time_step_size_sim / self.time_step_op)
         self.clock_hours = 0 * self.time_step_size_sim / 3600   # in [h]
         self.clock_days = self.clock_hours / 24                 # in [d]
-        self.num_gas_eua = 3                     # Number of gas and EUA prices (before 12 hours, current, and in 24 hours)
+        # self.act_ep_h = self.act_ep_h + self.price_past         # Add the number of past values to the current index
+        # self.act_ep_d = self.act_ep_d + 1                       # Add 1 to the current index to account for the current value   
 
         self._initialize_datasets()
         self._initialize_op_rew()
@@ -82,22 +83,26 @@ class PTGEnv(gym.Env):
     def _initialize_datasets(self):
         """Initialize data sets and temporal encoding"""
         # self.e_r_b: np.array that stores elec. price data, potential reward, and boolean identifier
-        #       Dimensions = [Type of data] x [No. of day-ahead values] x [historical values]
+        #       Dimensions = [Type of data] x [No. of values] x [historical values]
         #           Type of data = [el_price, pot_rew, part_full_b]
-        #           No. of day-ahead values = price_ahead
+        #           No. of values = price_ahead + price_past
         #           historical values = No. of values in the electricity price data set
-        # e.g. e_r_b_train[0, 5, 156] represents the future value of the electricity price [0,-,-] in
-        # 5 hours [-,5,-] at the 156ths entry of the electricity price data set
-        self.el_act = self.e_r_b[0, :, self.act_ep_h]  # current electricity price values
+        # e.g. e_r_b_train[0, 12, 156] represents the current value of the electricity price [0,-,-] at the
+        # 156ths entry of the electricity price data set 
+        self.e_r_b_act = self.e_r_b[:, :, self.act_ep_h]   # values [-12h, ..., 0h, ..., 12h)]
 
         # self.g_e: np.array that stores gas and EUA price data
         #       Dimensions = [Type of data] x [No. of day-ahead values] x [historical values]
-        #           Type of data = [gas_price, pot_rew, part_full_b]
+        #           Type of data = [gas_price, eua_price]
         #           No. of day-ahead values = 2 (today and tomorrow)
-        self.g_e_act = self.g_e[:, :, self.act_ep_d]  # current values
+        #           historical values = No. of values in the price data set
+        self.g_e_act = self.g_e[:, :, self.act_ep_d]        # values [0h, 24h]
 
-        self.el_act = self.e_r_b[0, :, self.act_ep_h]            #################self.el_price_ahead + self.el_price_past,
-        self.g_e_act = self.g_e[:, :, self.act_ep_d]                #################self.num_gas_eua
+        # Initialize gas and EUA price arrays
+        self.num_gas_eua = 3                                                # Number of gas and EUA prices (before 12 hours, current, and in 12 hours)
+        self.gas_eua_price_d = np.zeros((2, self.num_gas_eua))              # Gas/EUA prices [-12h, 0, 12h]
+        self.gas_eua_price_d[:, 0] = self.g_e[:, 0, self.act_ep_d-1]        # Since the data sets start at 0:00, the first entry is the value of the previous day 
+        self.gas_eua_price_d[:, 1:] = np.ones((self.num_gas_eua-1,)) *  self.g_e[:, 0, self.act_ep_d]
 
         # # Temporal encoding for time step within an hour (sine-cosine transformation)
         # self.temp_h_enc_sin = math.sin(2 * math.pi * self.clock_hours)
@@ -181,10 +186,10 @@ class PTGEnv(gym.Env):
         
     def _normalize_observations(self):
         """Normalize observations using standardization"""
-        self.pot_rew_n = (self.el_act[1, :] - self.rew_l_b) / (self.rew_u_b - self.rew_l_b)
-        self.el_n = (self.el_act[0, :] - self.el_l_b) / (self.el_u_b - self.el_l_b)
-        self.gas_n = (self.g_e_act[0, :] - self.gas_l_b) / (self.gas_u_b - self.gas_l_b)
-        self.eua_n = (self.g_e_act[1, :] - self.eua_l_b) / (self.eua_u_b - self.eua_l_b)
+        self.pot_rew_n = (self.e_r_b_act[1, :] - self.rew_l_b) / (self.rew_u_b - self.rew_l_b)
+        self.el_n = (self.e_r_b_act[0, :] - self.el_l_b) / (self.el_u_b - self.el_l_b)
+        self.gas_n = (self.gas_eua_price_d[0, :] - self.gas_l_b) / (self.gas_u_b - self.gas_l_b)
+        self.eua_n = (self.gas_eua_price_d[1, :] - self.eua_l_b) / (self.eua_u_b - self.eua_l_b)
         self.Meth_T_cat_n = (self.Meth_T_cat - self.T_l_b) / (self.T_u_b - self.T_l_b)
         self.Meth_H2_flow_n = (self.Meth_H2_flow - self.h2_l_b) / (self.h2_u_b - self.h2_l_b)
         self.Meth_CH4_flow_n = (self.Meth_CH4_flow - self.ch4_l_b) / (self.ch4_u_b - self.ch4_l_b)
@@ -210,7 +215,7 @@ class PTGEnv(gym.Env):
         """Retrieve additional details or metadata about the environment"""
         return {
             "step": self.k,
-            "el_price_act": self.el_act[0, 0],
+            "el_price_act": self.e_r_b_act[0, 12],
             "gas_price_act": self.g_e_act[0, 0],
             "eua_price_act": self.g_e_act[1, 0],
             "Meth_State": self.Meth_State,
@@ -231,8 +236,8 @@ class PTGEnv(gym.Env):
             "water_costs [ct/h]": -self.water_costs,
             "reward [ct]": self.rew,
             "cum_reward": self.cum_rew,
-            "Pot_Reward": self.el_act[1, 0],
-            "Part_Full": self.el_act[2, 0],
+            "Pot_Reward": self.e_r_b_act[1, 12],
+            "Part_Full": self.e_r_b_act[2, 12],
         }
 
     def _get_reward(self):
@@ -265,7 +270,7 @@ class PTGEnv(gym.Env):
 
         # Linear regression model for LHV efficiency of a 6 MW electrolyzer
         # Costs for electricity:
-        self.elec_costs_heating = self.Meth_el_heating / 1000 * self.el_act[0, 0]    # Electricity costs for methanation heating in [ct/h]
+        self.elec_costs_heating = self.Meth_el_heating / 1000 * self.e_r_b_act[0, 12]    # Electricity costs for methanation heating in [ct/h]
         self.load_elec = self.h2_volumeflow / self.max_h2_volumeflow                    # Electrolyzer load
         if self.load_elec < self.min_load_electrolyzer:
             self.eta_electrolyzer = 0.02
@@ -274,7 +279,7 @@ class PTGEnv(gym.Env):
                                      0.01 * self.load_elec ** (-1) - 1.68 * 10 ** (-3) * self.load_elec ** (-2) +
                                      2.51 * 10 ** (-5) * self.load_elec ** (-3))
         self.elec_costs_electrolyzer = self.h2_volumeflow * self.H_u_H2 * 1000 / self.eta_electrolyzer * \
-                                       self.el_act[0, 0]                             # Electricity costs for water electrolysis in [ct/h]
+                                       self.e_r_b_act[0, 12]                             # Electricity costs for water electrolysis in [ct/h]
         self.elec_costs = self.elec_costs_heating + self.elec_costs_electrolyzer
 
         # Costs for water consumption:
@@ -403,9 +408,15 @@ class PTGEnv(gym.Env):
         self.clock_days = self.clock_hours / 24
         h_step = math.floor(self.clock_hours)
         d_step = math.floor(self.clock_days)
-        self.el_act = self.e_r_b[0, :, self.act_ep_h + h_step]
+        self.e_r_b_act = self.e_r_b[0, :, self.act_ep_h + h_step]
         self.g_e_act = self.g_e[:, :, self.act_ep_d + d_step]
 
+        self.gas_eua_price_d[:, 1] = self.g_e_act[:, 0]        # Current gas/EUA price
+
+        if self.clock_days % 0.5 == 0 and self.clock_days % 1 != 0:
+            self.gas_eua_price_d[:, 0] = self.gas_eua_price_d[:, 1]         # At noon, the value before 12h becomes the current gas/EUA price
+            self.gas_eua_price_d[:, 2] = self.g_e_act[:, 1]    # At noon, the value in 12h becomes the next-day gas/EUA price
+        
         # self.temp_h_enc_sin = math.sin(2 * math.pi * self.clock_hours)
         # self.temp_h_enc_cos = math.cos(2 * math.pi * self.clock_hours)
 

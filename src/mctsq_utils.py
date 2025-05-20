@@ -244,7 +244,7 @@ class Preprocessing():
 
         # e_r_b: Multi-Dimensional array which stores Day-ahead electricity price data as well as Day-ahead potential rewards
         # and load identifiers for the entire training and test sets
-        # e.g. e_r_b_train[0, 5, 156] represents the future value of the electricity price [0,-,-] in 4 hours [-,5,-] at the
+        # e.g. e_r_b_train[0, 12, 156] represents the current value of the electricity price [0,-,-] at the
         # 156ths entry of the electricity price data set 
         self.e_r_b_train = np.zeros((3, total_len, self.dict_price_data['el_price_train'].shape[0] - total_len))
         self.e_r_b_val = np.zeros((3, total_len, self.dict_price_data['el_price_val'].shape[0] - total_len))

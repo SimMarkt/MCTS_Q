@@ -21,7 +21,7 @@ from src.mctsq_config_env import EnvConfiguration
 from src.mctsq_config_train import TrainConfiguration
 from src.mctsq_config_mcts import MCTS_Q
 
-#TODO: FOR VALIDATION AND TESTING ADD PRICE_PAST NUMBER OF VALUES AT THE BEGINNING OF THE TEST SET TO ALIGN WITH FORMER TESTS
+#TODO: FOR TRAINING, VALIDATION AND TESTING ADD PRICE_PAST NUMBER OF VALUES AT THE BEGINNING OF THE TEST SET TO ALIGN WITH FORMER TESTS
 
 def computational_resources(TrainConfig):
     """

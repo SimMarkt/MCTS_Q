@@ -12,6 +12,8 @@ device : auto               # Computational device to use: ['cpu', 'cuda', 'auto
                             # 'auto' selects GPU if available, otherwise defaults to CPU
 str_inv : train             # Specifies the training results and models for a specific investigation
 
+path : /logs/               # Path to save the MTCS_Q model
+
 train_steps : 1500000         # No. of training steps
 val_steps : 20000            # Validation interval: No. of steps between evaluations during training
 # Random seeds for reproducibility of neural network initialization and environment randomness:

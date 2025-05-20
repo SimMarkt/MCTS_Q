@@ -167,7 +167,7 @@ class Preprocessing():
         #   np.array which stores elec. price data, potential reward, and boolean identifier
         #   Dimensions = [Type of data] x [No. of day-ahead values] x [historical values]
         #       Type of data = [el_price, pot_rew, part_full_b]
-        #       No. of day-ahead values = EnvConfig.price_ahead
+        #       No. of day-ahead values = EnvConfig.price_ahead + EnvConfig.price_past
         #       historical values = No. of values in the electricity price data set
         self.e_r_b_train, self.e_r_b_val, self.e_r_b_test = None, None, None
 
@@ -240,24 +240,26 @@ class Preprocessing():
     def preprocessing_array(self):
         """Convert dictionaries to NumPy arrays for computational efficiency"""
 
+        total_len = self.EnvConfig.price_ahead + self.EnvConfig.price_past
+
         # e_r_b: Multi-Dimensional array which stores Day-ahead electricity price data as well as Day-ahead potential rewards
         # and load identifiers for the entire training and test sets
         # e.g. e_r_b_train[0, 5, 156] represents the future value of the electricity price [0,-,-] in 4 hours [-,5,-] at the
         # 156ths entry of the electricity price data set 
-        self.e_r_b_train = np.zeros((3, self.EnvConfig.price_ahead, self.dict_price_data['el_price_train'].shape[0] - self.EnvConfig.price_ahead))
-        self.e_r_b_val = np.zeros((3, self.EnvConfig.price_ahead, self.dict_price_data['el_price_val'].shape[0] - self.EnvConfig.price_ahead))
-        self.e_r_b_test = np.zeros((3, self.EnvConfig.price_ahead, self.dict_price_data['el_price_test'].shape[0] - self.EnvConfig.price_ahead))
+        self.e_r_b_train = np.zeros((3, total_len, self.dict_price_data['el_price_train'].shape[0] - total_len))
+        self.e_r_b_val = np.zeros((3, total_len, self.dict_price_data['el_price_val'].shape[0] - total_len))
+        self.e_r_b_test = np.zeros((3, total_len, self.dict_price_data['el_price_test'].shape[0] - total_len))
 
-        for i in range(self.EnvConfig.price_ahead):    
-            self.e_r_b_train[0, i, :] = self.dict_price_data['el_price_train'][i:(-self.EnvConfig.price_ahead + i)]
-            self.e_r_b_train[1, i, :] = self.dict_pot_r_b['pot_rew_train'][i:(-self.EnvConfig.price_ahead + i)]
-            self.e_r_b_train[2, i, :] = self.dict_pot_r_b['part_full_b_train'][i:(-self.EnvConfig.price_ahead + i)]
-            self.e_r_b_val[0, i, :] = self.dict_price_data['el_price_val'][i:(-self.EnvConfig.price_ahead + i)]
-            self.e_r_b_val[1, i, :] = self.dict_pot_r_b['pot_rew_val'][i:(-self.EnvConfig.price_ahead + i)]
-            self.e_r_b_val[2, i, :] = self.dict_pot_r_b['part_full_b_val'][i:(-self.EnvConfig.price_ahead + i)]
-            self.e_r_b_test[0, i, :] = self.dict_price_data['el_price_test'][i:(-self.EnvConfig.price_ahead + i)]
-            self.e_r_b_test[1, i, :] = self.dict_pot_r_b['pot_rew_test'][i:(-self.EnvConfig.price_ahead + i)]
-            self.e_r_b_test[2, i, :] = self.dict_pot_r_b['part_full_b_test'][i:(-self.EnvConfig.price_ahead + i)]
+        for i in range(total_len):    
+            self.e_r_b_train[0, i, :] = self.dict_price_data['el_price_train'][i:(-total_len + i)]
+            self.e_r_b_train[1, i, :] = self.dict_pot_r_b['pot_rew_train'][i:(-total_len + i)]
+            self.e_r_b_train[2, i, :] = self.dict_pot_r_b['part_full_b_train'][i:(-total_len + i)]
+            self.e_r_b_val[0, i, :] = self.dict_price_data['el_price_val'][i:(-total_len + i)]
+            self.e_r_b_val[1, i, :] = self.dict_pot_r_b['pot_rew_val'][i:(-total_len + i)]
+            self.e_r_b_val[2, i, :] = self.dict_pot_r_b['part_full_b_val'][i:(-total_len + i)]
+            self.e_r_b_test[0, i, :] = self.dict_price_data['el_price_test'][i:(-total_len + i)]
+            self.e_r_b_test[1, i, :] = self.dict_pot_r_b['pot_rew_test'][i:(-total_len + i)]
+            self.e_r_b_test[2, i, :] = self.dict_pot_r_b['part_full_b_test'][i:(-total_len + i)]
 
         # g_e: Multi-Dimensional Array which stores Day-ahead gas and EUA price data for the entire training and test set        
         self.g_e_train = np.zeros((2, 2, self.dict_price_data['gas_price_train'].shape[0]-1))
@@ -467,7 +469,7 @@ def create_envs(env_id, env_kwargs_data, TrainConfig):
 class Postprocessing():
     """A class for post-processing"""
 
-    def __init__(self, str_id, AgentConfig, EnvConfig, TrainConfig, env_test_post, Preprocess, model):
+    def __init__(self, str_id, EnvConfig, TrainConfig, env_test_post, Preprocess, model):
         """
             Initializes variables
             :param str_id: Unique identifier for the current training run.
@@ -477,7 +479,6 @@ class Postprocessing():
             :param env_test_post: Test environment instance used for post-processing.
             :param Preprocess: Instance of the Preprocessing class.
         """
-        self.AgentConfig = AgentConfig
         self.EnvConfig = EnvConfig
         self.TrainConfig = TrainConfig
         self.eps_sim_steps_test = Preprocess.eps_sim_steps_test
@@ -485,6 +486,7 @@ class Postprocessing():
         self.stats_dict_test = {}
         self.str_id = str_id
         self.model = model
+        model.load(TrainConfig.path + str_id + "/weights")
 
     def test_performance(self):
         """

@@ -21,6 +21,8 @@ from src.mctsq_config_env import EnvConfiguration
 from src.mctsq_config_train import TrainConfiguration
 from src.mctsq_config_mcts import MCTS_Q
 
+#TODO: FOR VALIDATION AND TESTING ADD PRICE_PAST NUMBER OF VALUES AT THE BEGINNING OF THE TEST SET TO ALIGN WITH FORMER TESTS
+
 def computational_resources(TrainConfig):
     """
         Configures computational resources and sets the random seed for the current thread
@@ -100,16 +102,14 @@ def main():
 
     print("...finished training!\n")
 
-    # model.learn(total_timesteps=TrainConfig.train_steps, callback=[eval_callback_val])  # Evaluate the RL agent only on the validation set
-
-    # # ------------------------------------------------Save model--------------------------------------------------
-    # if TrainConfig.model_conf == "save_model" or TrainConfig.model_conf == "save_load_model":
-    #     print("Save RL agent under ./logs/ ... \n") 
-    #     AgentConfig.save_model(model)
+    # ------------------------------------------------Save model--------------------------------------------------
+    if TrainConfig.model_conf == "save_model" or TrainConfig.model_conf == "save_load_model":
+        print("Save MCTS_Q agent under ./logs/ ... \n") 
+        model.save(TrainConfig.path + str_id + "/weights")
     
     # ----------------------------------------------Post-processing-----------------------------------------------
     print("Postprocessing...")
-    PostProcess = Postprocessing(str_id, AgentConfig, EnvConfig, TrainConfig, env_test_post, Preprocess, model)
+    PostProcess = Postprocessing(str_id, EnvConfig, TrainConfig, env_test_post, Preprocess, model)
     PostProcess.test_performance()
     PostProcess.plot_results()
 

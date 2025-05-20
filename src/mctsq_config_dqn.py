@@ -7,7 +7,6 @@ import random
 
 #TODO: Add a function to save the model
 #TODO: Add a function to load the model
-#TODO: Add time features to the data  
 #TODO: Perhaps Include loss which minimizes the the difference between the MCTS policy and DQN policy and also the value (However, the DQN policy directly inferes from the value, not a distinct network -> perhaps not necessary)
 
 # Utility functions for temporal encoding
@@ -197,10 +196,35 @@ class TripleEncoderDQN(nn.Module):
         fc_layers.append(nn.Linear(hidden_units, action_dim))
         self.fc_layers = nn.Sequential(*fc_layers)
 
-    def forward(self, price_data, process_data, gas_eua_data):
+    def forward(self, price_data, process_data, gas_eua_data, 
+                price_step_minutes=15, process_step_minutes=15, 
+                price_start_minute=0, process_start_minute=0, 
+                gas_eua_hours_offsets=[-12, 0, 12]):
         # price_data: (batch, price_seq_len, el_input_dim)
         # process_data: (batch, process_seq_len, process_input_dim)
         # gas_eua_data: (batch, 3, gas_eua_input_dim)
+
+        # Add temporal features (convert to numpy if needed)
+        if isinstance(price_data, torch.Tensor):
+            price_data_np = price_data.detach().cpu().numpy()
+        else:
+            price_data_np = price_data
+        price_data_np = add_time_features(price_data_np, price_step_minutes, price_start_minute)
+        price_data = torch.FloatTensor(price_data_np).to(price_data.device if isinstance(price_data, torch.Tensor) else 'cpu')
+
+        if isinstance(process_data, torch.Tensor):
+            process_data_np = process_data.detach().cpu().numpy()
+        else:
+            process_data_np = process_data
+        process_data_np = add_time_features(process_data_np, process_step_minutes, process_start_minute)
+        process_data = torch.FloatTensor(process_data_np).to(process_data.device if isinstance(process_data, torch.Tensor) else 'cpu')
+
+        if isinstance(gas_eua_data, torch.Tensor):
+            gas_eua_data_np = gas_eua_data.detach().cpu().numpy()
+        else:
+            gas_eua_data_np = gas_eua_data
+        gas_eua_data_np = add_time_features_to_gas_eua(gas_eua_data_np, gas_eua_hours_offsets)
+        gas_eua_data = torch.FloatTensor(gas_eua_data_np).to(gas_eua_data.device if isinstance(gas_eua_data, torch.Tensor) else 'cpu')
 
         # Adjust input shape for encoders if needed
         if isinstance(self.price_encoder, ConvAttentionEnc):
@@ -365,6 +389,27 @@ class DQNModel:
                         break
             returns.append(G)
         return torch.FloatTensor(returns)
+    
+    def save(self, filepath):
+        """
+        Save the policy network, target network, optimizer, and epsilon.
+        """
+        torch.save({
+            'policy_net_state_dict': self.policy_net.state_dict(),
+            'target_net_state_dict': self.target_net.state_dict(),
+            'optimizer_state_dict': self.optimizer.state_dict(),
+            'epsilon': self.epsilon
+        }, filepath)
+
+    def load(self, filepath):
+        """
+        Load the policy network, target network, optimizer, and epsilon.
+        """
+        checkpoint = torch.load(filepath, map_location='cpu')
+        self.policy_net.load_state_dict(checkpoint['policy_net_state_dict'])
+        self.target_net.load_state_dict(checkpoint['target_net_state_dict'])
+        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        self.epsilon = checkpoint.get('epsilon', self.epsilon)
 
     def update_target_network(self):
         self.target_net.load_state_dict(self.policy_net.state_dict())

@@ -247,6 +247,18 @@ class MCTS_Q:
             node.total_value += value
             node = node.parent
 
+    def save(self, filepath):
+        """
+        Save the DQN model parameters used by MCTS_Q.
+        """
+        self.dqn.save(filepath)
+
+    def load(self, filepath):
+        """
+        Load the DQN model parameters into MCTS_Q.
+        """
+        self.dqn.load(filepath)
+
 
 class MCTSNode:
     def __init__(self, env, parent=None, action=None, done=False, remaining_steps=42, total_steps=42, depth=0, maximum_depth=42):

@@ -24,6 +24,7 @@ from src.mctsq_config_dqn import DQNModel
 #TODO: Include deterministic=True für validation and testing??
 #TODO: Write stats during training and evaluation into tensorboard file
 #TODO: Include auto exploration adjustment
+#TODO: ADJUST INPUT_DIMENSION FOR DQN MODEL
 
 class MCTS_Q:
     def __init__(self, env_train, seed):

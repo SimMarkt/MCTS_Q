@@ -5,8 +5,6 @@ import numpy as np
 from collections import deque
 import random
 
-#TODO: Add a function to save the model
-#TODO: Add a function to load the model
 #TODO: Perhaps Include loss which minimizes the the difference between the MCTS policy and DQN policy and also the value (However, the DQN policy directly inferes from the value, not a distinct network -> perhaps not necessary)
 
 # Utility functions for temporal encoding
@@ -316,32 +314,6 @@ class DQNModel:
         batch = self.replay_buffer.sample(self.batch_size)
         states, actions, rewards, next_states, dones, weights, indices = batch
 
-        # "Elec_Price": spaces.Box(low=b_norm[0] * np.ones((self.el_price_ahead + self.el_price_past,)),
-        #                                 high=b_norm[1] * np.ones((self.el_price_ahead + self.el_price_past,)), dtype=np.float64),
-        #         "Gas_Price": spaces.Box(low=b_norm[0] * np.ones((self.num_gas_eua,)),
-        #                                 high=b_norm[1] * np.ones((self.num_gas_eua,)), dtype=np.float64),
-        #         "EUA_Price": spaces.Box(low=b_norm[0] * np.ones((self.num_gas_eua,)),
-        #                                 high=b_norm[1] * np.ones((self.num_gas_eua,)), dtype=np.float64),
-        #         "T_CAT": spaces.Box(low=b_norm[0], high=b_norm[1], shape=(self.seq_length,), dtype=np.float64),
-        #         "H2_in_MolarFlow": spaces.Box(low=b_norm[0], high=b_norm[1], shape=(self.seq_length,), dtype=np.float64),
-        #         "CH4_syn_MolarFlow": spaces.Box(low=b_norm[0], high=b_norm[1], shape=(self.seq_length,), dtype=np.float64),
-        #         "H2_res_MolarFlow": spaces.Box(low=b_norm[0], high=b_norm[1], shape=(self.seq_length,), dtype=np.float64),
-        #         "H2O_DE_MassFlow": spaces.Box(low=b_norm[0], high=b_norm[1], shape=(self.seq_length,), dtype=np.float64),
-        #         "Elec_Heating": spaces.Box(low=b_norm[0], high=b_norm[1], shape=(self.seq_length,), dtype=np.float64),
-        #     }
-        
-        # {
-        #     "Elec_Price": np.array(self.el_n, dtype=np.float64),
-        #     "Gas_Price": np.array(self.gas_n, dtype=np.float64),
-        #     "EUA_Price": np.array(self.eua_n, dtype=np.float64),
-        #     "T_CAT": np.array([self.Meth_T_cat_n], dtype=np.float64),
-        #     "H2_in_MolarFlow": np.array([self.Meth_H2_flow_n], dtype=np.float64),
-        #     "CH4_syn_MolarFlow": np.array([self.Meth_CH4_flow_n], dtype=np.float64),
-        #     "H2_res_MolarFlow": np.array([self.Meth_H2_res_flow_n], dtype=np.float64),
-        #     "H2O_DE_MassFlow": np.array([self.Meth_H2O_flow_n], dtype=np.float64),
-        #     "Elec_Heating": np.array([self.Meth_el_heating_n], dtype=np.float64),
-        # }
-
         price_states = np.array([s["Elec_Price"] for s in states])
         process_states = np.array([
             np.concatenate([s["T_CAT"], s["H2_in_MolarFlow"], s["CH4_syn_MolarFlow"], s["H2_res_MolarFlow"], s["H2O_DE_MassFlow"], s["Elec_Heating"]])
@@ -361,7 +333,6 @@ class DQNModel:
             for s in next_states
         ])
         
-
         price_states = torch.FloatTensor(price_states)
         process_states = torch.FloatTensor(process_states)
         gas_eua_states = torch.FloatTensor(gas_eua_states)
@@ -375,14 +346,10 @@ class DQNModel:
         # Compute Q values
         q_values = self.policy_net(price_states, process_states, gas_eua_states).gather(1, actions.unsqueeze(1)).squeeze(1)
 
-        # Compute target Q values with multi-step returns
-        n_steps = 3
-        multi_step_returns = self.compute_multi_step_return(rewards, next_price_states, next_process_states, next_gas_eua_states, dones, n_steps)
+        # --- One-step TD target update ---
         with torch.no_grad():
-            next_q_values_policy = self.policy_net(next_price_states, next_process_states, next_gas_eua_states).max(1)[0]
-            next_q_values_target = self.target_net(next_price_states, next_process_states, next_gas_eua_states).max(1)[0]
-            next_q_values = 0.5 * (next_q_values_policy + next_q_values_target)
-            target_q_values = multi_step_returns + (self.gamma ** n_steps) * next_q_values * (1 - dones)
+            next_q_values = self.target_net(next_price_states, next_process_states, next_gas_eua_states).max(1)[0]
+            target_q_values = rewards + self.gamma * next_q_values * (1 - dones)
 
         td_error = q_values - target_q_values
         loss = (weights * td_error.pow(2)).mean()
@@ -394,20 +361,6 @@ class DQNModel:
 
         self.replay_buffer.update_priorities(indices, td_error.abs().detach().numpy())
         self.epsilon = max(self.epsilon_end, self.epsilon * self.epsilon_decay)
-
-    def compute_multi_step_return(self, rewards, next_price_states, next_process_states, dones, n_steps):
-        returns = []
-        for t in range(len(rewards)):
-            G = 0
-            discount = 1
-            for k in range(n_steps):
-                if t + k < len(rewards):
-                    G += discount * rewards[t + k]
-                    discount *= self.gamma
-                    if dones[t + k]:
-                        break
-            returns.append(G)
-        return torch.FloatTensor(returns)
     
     def save(self, filepath):
         """

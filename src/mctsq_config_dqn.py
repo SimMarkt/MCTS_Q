@@ -110,12 +110,6 @@ class GasEUAEncoder(nn.Module):
         elif encoder_type == "gru":
             self.encoder = GRUAttentionEnc(input_dim, embed_dim)
             self.flatten = False
-        elif encoder_type == "conv":
-            self.encoder = ConvAttentionEnc(input_dim, embed_dim)
-            self.flatten = False
-        elif encoder_type == "transformer":
-            self.encoder = TransformerEnc(input_dim, embed_dim, num_heads=4, num_layers=2)
-            self.flatten = False
         else:
             raise ValueError("Invalid gas/EUA encoder type.")
 
@@ -316,20 +310,20 @@ class DQNModel:
 
         price_states = np.array([s["Elec_Price"] for s in states])
         process_states = np.array([
-            np.concatenate([s["T_CAT"], s["H2_in_MolarFlow"], s["CH4_syn_MolarFlow"], s["H2_res_MolarFlow"], s["H2O_DE_MassFlow"], s["Elec_Heating"]])
+            np.stack([s["T_CAT"], s["H2_in_MolarFlow"], s["CH4_syn_MolarFlow"], s["H2_res_MolarFlow"], s["H2O_DE_MassFlow"], s["Elec_Heating"]])
             for s in states
         ])
         gas_eua_states = np.array([
-            np.concatenate([s["Gas_Price"], s["EUA_Price"]])
+            np.stack([s["Gas_Price"], s["EUA_Price"]])
             for s in states
         ])
         next_price_states = np.array([s["Elec_Price"] for s in next_states])
         next_process_states = np.array([
-            np.concatenate([s["T_CAT"], s["H2_in_MolarFlow"], s["CH4_syn_MolarFlow"], s["H2_res_MolarFlow"], s["H2O_DE_MassFlow"], s["Elec_Heating"]])
+            np.stack([s["T_CAT"], s["H2_in_MolarFlow"], s["CH4_syn_MolarFlow"], s["H2_res_MolarFlow"], s["H2O_DE_MassFlow"], s["Elec_Heating"]])
             for s in next_states
         ])
         next_gas_eua_states = np.array([
-            np.concatenate([s["Gas_Price"], s["EUA_Price"]])
+            np.stack([s["Gas_Price"], s["EUA_Price"]])
             for s in next_states
         ])
         

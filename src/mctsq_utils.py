@@ -11,8 +11,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import warnings
 from tqdm import tqdm
+import gymnasium as gym 
 
-from src.rl_opt import calculate_optimum
+from src.mctsq_opt import calculate_optimum
 
 #TODO: rew_u_b und rew_u_l immer über training set auch in RL_PtG
 #TODO in RL_PtG irgendwo comment einfügen, warum kein truncate sondern nur terminate
@@ -161,7 +162,6 @@ class Preprocessing():
         # Placeholder variables for computed values.
         self.dict_pot_r_b = None                    # Dictionary containing the potential reward [pot_rew...] and the boolean load identifier [part_full_b...]
         self.r_level = None                         # Defines the reward penalty level based on electricity, synthetic natural gas (SNG), and EUA price levels
-        self.r_norm
 
         # e_r_b_train/e_r_b_val/e_r_b_test: (hourly values)
         #   np.array which stores elec. price data, potential reward, and boolean identifier
@@ -345,7 +345,7 @@ class Preprocessing():
             **{f"ptg_{key}": self.EnvConfig.ptg_state_space[key] for key in 
             ["standby", "cooldown", "startup", "partial_load", "full_load"]},
             **{key: getattr(self.EnvConfig, key) for key in 
-            ["noise", "eps_len_d", "sim_step", "time_step_op", "price_ahead", "scenario",
+            ["noise", "eps_len_d", "sim_step", "time_step_op", "price_ahead", "price_past", "scenario",
                 "convert_mol_to_Nm3", "H_u_CH4", "H_u_H2", "dt_water", "cp_water", "rho_water",
                 "Molar_mass_CO2", "Molar_mass_H2O", "h_H2O_evap", "eeg_el_price", "heat_price",
                 "o2_price", "water_price", "min_load_electrolyzer", "max_h2_volumeflow", "eta_CHP",
@@ -357,10 +357,9 @@ class Preprocessing():
                 "j_fully_developed", "el_l_b", "el_u_b", "gas_l_b", "gas_u_b", "eua_l_b", "eua_u_b",
                 "T_l_b", "T_u_b", "h2_l_b", "h2_u_b", "ch4_l_b", "ch4_u_b", "h2_res_l_b", "h2_res_u_b",
                 "h2o_l_b", "h2o_u_b", "heat_l_b", "heat_u_b"]},
-            "parallel": self.TrainConfig.parallel,
             "n_eps_loops": self.n_eps_loops,
             "reward_level": self.r_level,
-            "action_type": self.AgentConfig.rl_alg_hyp["action_type"],
+            "action_type": "discrete",
         }
 
         # Operation data
@@ -420,16 +419,16 @@ def initial_print():
     print('---------------------------------------------------------------------------------------------\n')
 
 
-def config_print(AgentConfig, EnvConfig, TrainConfig):
+def config_print(EnvConfig, TrainConfig, MCTSQConfig):
     """
         Gathers and prints general settings
-        :param AgentConfig: Agent configuration (class object)
         :param EnvConfig: Environment configuration (class object)
         :param TrainConfig: Training configuration (class object)
+        :param MCTSQConfig: MCTS_Q configuration (class object)
         :return str_id: String for identification of the present training run
     """
     print("Set training case...")
-    print(f"---Training case details: RL_PtG{TrainConfig.str_inv} | {TrainConfig.model_conf} ")
+    print(f"---Training case details: MCTS_Q_{TrainConfig.str_inv} ")
     str_id = "MCTS_Q_" + TrainConfig.str_inv
     if EnvConfig.scenario == 1: print("    > Business case (_BS):\t\t\t 1 - Trading at the electricity, gas, and emission spot markets")
     elif EnvConfig.scenario == 2: print("    > Business case  (_BS):\t\t\t 2 - Fixed synthetic natural gas (SNG) price and trading at the electricity and emission spot markets")
@@ -442,7 +441,7 @@ def config_print(AgentConfig, EnvConfig, TrainConfig):
     print(f"    > Time step size (action frequency) (_ts) :\t {EnvConfig.sim_step} seconds")
     str_id += "_ts" + str(EnvConfig.sim_step)
     print(f"    > Random seed (_rs) :\t\t\t {TrainConfig.seed_train}")
-    str_id += AgentConfig.get_hyper()
+    str_id += MCTSQConfig.get_hyper()
     str_id += "_rs" + str(TrainConfig.seed_train)                       # Random seed at the end of "str_id" for file simplified file
 
     return str_id
@@ -450,7 +449,7 @@ def config_print(AgentConfig, EnvConfig, TrainConfig):
 class CallbackVal():
 
     def __init__(self, env_id, env_kwargs_data_val, val_steps):
-        self.env = gym.make(env_id, env_kwargs_data_val, train_or_eval = "eval")
+        self.env = gym.make(env_id, dict_input=env_kwargs_data_val, train_or_eval = "eval")
         self.val_steps = val_steps  
         self.stats = {'steps': [],
                       'cum_rew': []}
@@ -459,8 +458,8 @@ class CallbackVal():
 def create_envs(env_id, env_kwargs_data, TrainConfig):
     """Creates environments for training, validation, and testing"""
 
-    env_train = gym.make(env_id, env_kwargs_data['env_kwargs_train'], train_or_eval = "train")
-    env_test_post = gym.make(env_id, env_kwargs_data['env_kwargs_test'], train_or_eval = "test")
+    env_train = gym.make(env_id, dict_input=env_kwargs_data['env_kwargs_train'], train_or_eval="train")
+    env_test_post = gym.make(env_id, dict_input=env_kwargs_data['env_kwargs_test'], train_or_eval="eval")
 
     callback_val = CallbackVal(env_id, env_kwargs_data['env_kwargs_val'], val_steps=TrainConfig.val_steps)
 

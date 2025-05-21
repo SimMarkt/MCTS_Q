@@ -8,9 +8,9 @@
 # ----------------------------------------------------------------------------------------------------------------
 
 # MCTS hyperparameters
-iterations : 1000           # No. of iterations for MCTS
+iterations : 100           # No. of iterations for MCTS
 c_init : 1.0                # Initial exploration parameter for PUCT
-c_base : 100                # Parameter for exploration increase in PUCT
+c_base : 10                # Parameter for exploration increase in PUCT
 maximum_depth : 72          # Maximum depth of the tree
 
 # Q-Learning hyperparameters
@@ -26,7 +26,6 @@ batch_size : 64             # Batch size for training
 activation : "relu"         # Activation function for the DQN model ("relu", "tanh")
 
 # Encoder hyperparameters
-encoder_type : "conv"         # Type of encoder used in the DQN model [Conv1D: "conv", GRU: "gru", Transformer: "transformer"]
 seq_length : 30               # Length of the sequence for time-series encoding
 seq_step : 10                 # Number of data steps in process data (2-Sec resolution) between two consequitive entries in the sequence (30 steps = 60 seconds)
 embed_dim : 64                # Dimension of the embedding layer

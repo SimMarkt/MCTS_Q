@@ -20,8 +20,6 @@ class EnvConfiguration:
         
         assert self.scenario in [1,2,3], f"Specified business scenario ({self.scenario}) must match one of the three implemented scenarios [1,2,3]!"
         self.train_len_d = None                                 # Total number of days in the training set                    
-        raw_mod_set = ['raw', 'mod']
-        assert self.raw_modified in raw_mod_set, f"Invalid type of state design specified - data/config_train.yaml -> raw_mod : {env_config['raw_modified']} must match {raw_mod_set}"
         
         # Construct file paths for process data depending on the load level (OP1 or OP2):
         assert self.operation in ['OP1', 'OP2'], f"Invalid load level specified - data/config_env.yaml -> operation : {env_config['operation']} must match ['OP1', 'OP2']"

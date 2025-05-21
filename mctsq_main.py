@@ -13,13 +13,12 @@ import torch as th
 
 # Library for the RL environment
 from gymnasium.envs.registration import registry, register
-import gymnasium as gym 
 
 # Libraries with utility functions and classes
 from src.mctsq_utils import load_data, initial_print, config_print, Preprocessing, Postprocessing, create_envs
 from src.mctsq_config_env import EnvConfiguration
 from src.mctsq_config_train import TrainConfiguration
-from src.mctsq_config_mcts import MCTS_Q
+from src.mctsq_config_mcts import MCTSQConfiguration, MCTS_Q
 
 #TODO: FOR TRAINING, VALIDATION AND TESTING ADD PRICE_PAST NUMBER OF VALUES AT THE BEGINNING OF THE TEST SET TO ALIGN WITH FORMER TESTS
 
@@ -68,12 +67,14 @@ def check_env(env_id):
         print(f"---Environment '{env_id}' is already registered.\n")
 
 def main():
-    # --------------------------------------Initialize the RL configuration---------------------------------------
+    # -------------------------------Initialize the configurations and the model----------------------------------
     initial_print()
     EnvConfig = EnvConfiguration()
     TrainConfig = TrainConfiguration()
+    MCTSQConfig = MCTSQConfiguration()
     computational_resources(TrainConfig)
-    str_id = config_print(EnvConfig, TrainConfig)
+
+    str_id = config_print(EnvConfig, TrainConfig, MCTSQConfig)
     
     # -----------------------------------------------Preprocessing------------------------------------------------
     print("Preprocessing...")
@@ -88,17 +89,17 @@ def main():
 
     # Instantiate the vectorized environments
     print("Load environment...")
-    env_id = 'PtGEnv-v0'
+    env_id = 'PtGEnv-v1'
     check_env(env_id)
     env_train, callback_val, env_test_post = create_envs(env_id, env_kwargs_data, TrainConfig)
-    
-    # ----------------------------------------------Initialize RL Model--------------------------------------------
-    print("Initializing the MCTS_Q model...")
-    model = MCTS_Q(env_train)
 
-    # ----------------------------------------------MCTS with RL--------------------------------------------------
-    print("Run MCTS with RL on the validation set... >>>", str_id, "<<< \n")
-    model.learn(total_timesteps=TrainConfig["train_steps"], callback=[callback_val])
+    # -------------------------------------------Initialize MCTS_Q------------------------------------------------
+    print("Initialize MCTS_Q agent...")
+    model = MCTS_Q(env_train, seed=TrainConfig.seed_train, config=MCTSQConfig)
+
+    # -------------------------------------------Training of MCTS_Q-----------------------------------------------
+    print("Training of MCTS_Q... >>>", str_id, "<<< \n")
+    model.learn(total_timesteps=TrainConfig.train_steps, callback=callback_val)
 
     print("...finished training!\n")
 

@@ -21,7 +21,7 @@
 import numpy as np
 import math
 
-from src.rl_config_env import EnvConfiguration
+from src.mctsq_config_env import EnvConfiguration
 
 def calculate_optimum(el_price_data: np.array, gas_price_data: np.array, eua_price_data: np.array, data_name: str, stats_names):
     """

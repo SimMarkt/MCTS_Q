@@ -1,7 +1,12 @@
+# Custom Environment implementing the Gymnasium interface for PtG dispatch optimization.
+# Version 1.0
+# Modifications: Observations space with process data time-series data of the last time step
+
 import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
 import math
+import copy
 
 ep_index = 0
 
@@ -38,10 +43,6 @@ class PTGEnv(gym.Env):
 
         # Unpack data from dictionary
         self.__dict__.update(dict_input)
-
-        # If multiprocessing, ensure ep_index is specific to each process
-        if self.parallel == "Multiprocessing":
-            ep_index = self.np_random.integers(0, self.n_eps_loops, size=1)[0]
 
         assert train_or_eval in ["train", "eval"], f'ptg_gym_env.py error: train_or_eval must be either "train" or "eval".'
         self.train_or_eval = train_or_eval
@@ -102,7 +103,8 @@ class PTGEnv(gym.Env):
         self.num_gas_eua = 3                                                # Number of gas and EUA prices (before 12 hours, current, and in 12 hours)
         self.gas_eua_price_d = np.zeros((2, self.num_gas_eua))              # Gas/EUA prices [-12h, 0, 12h]
         self.gas_eua_price_d[:, 0] = self.g_e[:, 0, self.act_ep_d-1]        # Since the data sets start at 0:00, the first entry is the value of the previous day 
-        self.gas_eua_price_d[:, 1:] = np.ones((self.num_gas_eua-1,)) *  self.g_e[:, 0, self.act_ep_d]
+        self.gas_eua_price_d[:, 1] = self.g_e[:, 0, self.act_ep_d]
+        self.gas_eua_price_d[:, 2] = self.g_e[:, 0, self.act_ep_d]
 
         # # Temporal encoding for time step within an hour (sine-cosine transformation)
         # self.temp_h_enc_sin = math.sin(2 * math.pi * self.clock_hours)
@@ -126,10 +128,9 @@ class PTGEnv(gym.Env):
         self.op = self.cooldown[self.i, :]                          # Current operation point               
         keys = ['H2_flow', 'CH4_flow', 'H2_res_flow', 'H2O_flow', 'el_heating'] 
         for i, key in enumerate(keys, start=2): setattr(self, f'Meth_{key}', self.op[i])
-        self.op_seq = np.ones((self.seq_length, len(keys))) * self.op               # Broadcasts vector across rows
-        print("TEST self.op_seq", self.op_seq)                           
-        for i, key in enumerate(keys, start=2): setattr(self, f'Meth_{key}_seq', self.op_seq[:, i])
-        print("TEST self.Meth_T_cat_seq", self.Meth_T_cat_seq) 
+        keys = ['T_cat', 'H2_flow', 'CH4_flow', 'H2_res_flow', 'H2O_flow', 'el_heating']   
+        self.op_seq = np.ones((self.seq_length, len(keys)+1)) * self.op               # Broadcasts vector across rows                         
+        for i, key in enumerate(keys, start=1): setattr(self, f'Meth_{key}_seq', self.op_seq[:, i])
         self.hot_cold = 0                   # Detect startup conditions (0=cold, 1=hot)
         self.state_change = False           # Track changes in methanation state Meth_State
         self.r_0 = self.reward_level[0]     # Reward level
@@ -173,8 +174,8 @@ class PTGEnv(gym.Env):
         
         self.observation_space = spaces.Dict(
             {
-                "Elec_Price": spaces.Box(low=b_norm[0] * np.ones((self.el_price_ahead + self.el_price_past,)),
-                                        high=b_norm[1] * np.ones((self.el_price_ahead + self.el_price_past,)), dtype=np.float64),
+                "Elec_Price": spaces.Box(low=b_norm[0] * np.ones((self.price_ahead + self.price_past,)),
+                                        high=b_norm[1] * np.ones((self.price_ahead + self.price_past,)), dtype=np.float64),
                 "Gas_Price": spaces.Box(low=b_norm[0] * np.ones((self.num_gas_eua,)),
                                         high=b_norm[1] * np.ones((self.num_gas_eua,)), dtype=np.float64),
                 "EUA_Price": spaces.Box(low=b_norm[0] * np.ones((self.num_gas_eua,)),
@@ -190,7 +191,7 @@ class PTGEnv(gym.Env):
         
     def _normalize_observations(self):
         """Normalize observations using standardization"""
-        self.pot_rew_n = (self.e_r_b_act[1, :] - self.rew_l_b) / (self.rew_u_b - self.rew_l_b)
+        
         self.el_n = (self.e_r_b_act[0, :] - self.el_l_b) / (self.el_u_b - self.el_l_b)
         self.gas_n = (self.gas_eua_price_d[0, :] - self.gas_l_b) / (self.gas_u_b - self.gas_l_b)
         self.eua_n = (self.gas_eua_price_d[1, :] - self.eua_l_b) / (self.eua_u_b - self.eua_l_b)
@@ -201,18 +202,18 @@ class PTGEnv(gym.Env):
         self.Meth_H2O_flow_n = (self.Meth_H2O_flow_seq - self.h2o_l_b) / (self.h2o_u_b - self.h2o_l_b)
         self.Meth_el_heating_n = (self.Meth_el_heating_seq - self.heat_l_b) / (self.heat_u_b - self.heat_l_b)
 
-    def _get_obs(self):
+    def get_obs(self):
         """Retrieve the current observations from the environment"""
         return {
             "Elec_Price": np.array(self.el_n, dtype=np.float64),
             "Gas_Price": np.array(self.gas_n, dtype=np.float64),
             "EUA_Price": np.array(self.eua_n, dtype=np.float64),
-            "T_CAT": np.array([self.Meth_T_cat_n], dtype=np.float64),
-            "H2_in_MolarFlow": np.array([self.Meth_H2_flow_n], dtype=np.float64),
-            "CH4_syn_MolarFlow": np.array([self.Meth_CH4_flow_n], dtype=np.float64),
-            "H2_res_MolarFlow": np.array([self.Meth_H2_res_flow_n], dtype=np.float64),
-            "H2O_DE_MassFlow": np.array([self.Meth_H2O_flow_n], dtype=np.float64),
-            "Elec_Heating": np.array([self.Meth_el_heating_n], dtype=np.float64),
+            "T_CAT": np.array(self.Meth_T_cat_n, dtype=np.float64),
+            "H2_in_MolarFlow": np.array(self.Meth_H2_flow_n, dtype=np.float64),
+            "CH4_syn_MolarFlow": np.array(self.Meth_CH4_flow_n, dtype=np.float64),
+            "H2_res_MolarFlow": np.array(self.Meth_H2_res_flow_n, dtype=np.float64),
+            "H2O_DE_MassFlow": np.array(self.Meth_H2O_flow_n, dtype=np.float64),
+            "Elec_Heating": np.array(self.Meth_el_heating_n, dtype=np.float64),
         }
 
     def _get_info(self):
@@ -412,7 +413,7 @@ class PTGEnv(gym.Env):
         self.clock_days = self.clock_hours / 24
         h_step = math.floor(self.clock_hours)
         d_step = math.floor(self.clock_days)
-        self.e_r_b_act = self.e_r_b[0, :, self.act_ep_h + h_step]
+        self.e_r_b_act = self.e_r_b[:, :, self.act_ep_h + h_step]
         self.g_e_act = self.g_e[:, :, self.act_ep_d + d_step]
 
         self.gas_eua_price_d[:, 1] = self.g_e_act[:, 0]        # Current gas/EUA price
@@ -435,7 +436,6 @@ class PTGEnv(gym.Env):
         # Store past process data sequence
         # For each column, sample backwards from the last entry
         self.op_seq = np.array([self.op[::-1, col][::self.seq_step][:self.seq_length] for col in range(self.op.shape[1])]).T
-        print("TEST2 self.op_seq", self.op_seq)
         self.Meth_T_cat_seq = self.op_seq[:, 1]
         self.Meth_H2_flow_seq = self.op_seq[:, 2]
         self.Meth_CH4_flow_seq = self.op_seq[:, 3]
@@ -452,7 +452,7 @@ class PTGEnv(gym.Env):
             self.state_change = False
 
         reward = self._get_reward()
-        observation = self._get_obs()
+        observation = self.get_obs()
         terminated = self._is_terminated()
         if self.train_or_eval == "train":
             info = {}
@@ -483,7 +483,7 @@ class PTGEnv(gym.Env):
         self._initialize_op_rew()
         self._normalize_observations()
 
-        observation = self._get_obs()
+        observation = self.get_obs()
         info = self._get_info()
 
         return observation, info
@@ -738,3 +738,31 @@ class PTGEnv(gym.Env):
 
         return self._perform_sim_step(self.full, self.Meth_State, self.full, self.M_state['full_load'],
                                       self.i, self.j, False)
+    
+    def __deepcopy__(self, memo):
+        """
+            Custom deepcopy to avoid copying large static arrays.
+        """
+        cls = self.__class__
+        result = cls.__new__(cls)
+        memo[id(self)] = result
+
+        # List of large static arrays to reference, not copy
+        static_arrays = [
+            'e_r_b', 'g_e',
+            'startup_cold', 'startup_hot', 'cooldown',
+            'standby_down', 'standby_up',
+            'op1_start_p', 'op2_start_f', 'op3_p_f',
+            'op4_p_f_p_5', 'op5_p_f_p_10', 'op6_p_f_p_15', 'op7_p_f_p_20',
+            'op8_f_p', 'op9_f_p_f_5', 'op10_f_p_f_10', 'op11_f_p_f_15', 'op12_f_p_f_20'
+        ]
+
+        for k, v in self.__dict__.items():
+            # Debug: print attribute name and shape if it's a numpy array
+            # if isinstance(v, np.ndarray):
+            #     print(f"Deepcopy: {k}, shape: {v.shape}, dtype: {v.dtype}")
+            if k in static_arrays:
+                setattr(result, k, v)
+            else:
+                setattr(result, k, copy.deepcopy(v, memo))
+        return result

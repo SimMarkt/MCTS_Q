@@ -21,7 +21,7 @@
 #   LHV: Lower heating value
 #   EEG: German Renewable Energy Act (Erneuerbare-Energien-Gesetz)
 
-scenario : 2                    # Business case (must be one of [1, 2, 3])
+scenario : 1                    # Business case (must be one of [1, 2, 3])
 operation : OP2                 # Load level: "OP1" or "OP2" for the PtG-CH4 plant
 price_ahead : 13                # Number of forecasted electricity price values for future data (0 to 12h)
 price_past : 12                 # Number of recent electricity price values for temperal encoding (-1 to -12h)

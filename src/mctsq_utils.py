@@ -447,7 +447,6 @@ def config_print(EnvConfig, TrainConfig, MCTSQConfig):
     return str_id
 
 class CallbackVal():
-
     def __init__(self, env_id, env_kwargs_data_val, val_steps):
         self.env = gym.make(env_id, dict_input=env_kwargs_data_val, train_or_eval = "eval")
         self.val_steps = val_steps  

@@ -188,6 +188,7 @@ class TripleEncoderDQN(nn.Module):
             price_data_np = price_data.detach().cpu().numpy()
         else:
             price_data_np = price_data
+
         price_data_np = add_time_features(price_data_np, price_step_minutes, price_start_minute)
         price_data = torch.FloatTensor(price_data_np).to(price_data.device if isinstance(price_data, torch.Tensor) else 'cpu')
 
@@ -251,7 +252,7 @@ class DQNModel:
         action_dim, embed_dim, hidden_layers, hidden_units, buffer_capacity, batch_size, gamma, lr,
         epsilon_start, epsilon_end, epsilon_decay,
         price_encoder_type="conv", process_encoder_type="gru", gas_eua_encoder_type="mlp",
-        activation="relu",
+        activation="relu", learning_starts=10000,
         seed=None
     ):
         # Set random seeds for reproducibility
@@ -271,6 +272,7 @@ class DQNModel:
         self.epsilon = epsilon_start
         self.epsilon_end = epsilon_end
         self.epsilon_decay = epsilon_decay
+        self.learning_starts = learning_starts
 
         self.policy_net = TripleEncoderDQN(
             el_input_dim, process_input_dim, gas_eua_input_dim,
@@ -301,29 +303,29 @@ class DQNModel:
             return q_values.argmax().item()
 
     def update(self):
-        if len(self.replay_buffer) < self.batch_size:
+        if (len(self.replay_buffer) < self.batch_size) and (len(self.replay_buffer) < self.learning_starts):
             return
 
         # Unpack buffer: states should be tuples (price_state, process_state)
         batch = self.replay_buffer.sample(self.batch_size)
         states, actions, rewards, next_states, dones, weights, indices = batch
 
-        price_states = np.array([s["Elec_Price"] for s in states])
+        price_states = np.array([s["Elec_Price"] for s in states])[..., np.newaxis]
         process_states = np.array([
-            np.stack([s["T_CAT"], s["H2_in_MolarFlow"], s["CH4_syn_MolarFlow"], s["H2_res_MolarFlow"], s["H2O_DE_MassFlow"], s["Elec_Heating"]])
+            np.stack([s["T_CAT"], s["H2_in_MolarFlow"], s["CH4_syn_MolarFlow"], s["H2_res_MolarFlow"], s["H2O_DE_MassFlow"], s["Elec_Heating"]], axis=-1)
             for s in states
         ])
         gas_eua_states = np.array([
-            np.stack([s["Gas_Price"], s["EUA_Price"]])
+            np.stack([s["Gas_Price"], s["EUA_Price"]], axis=-1)
             for s in states
         ])
-        next_price_states = np.array([s["Elec_Price"] for s in next_states])
+        next_price_states = np.array([s["Elec_Price"] for s in next_states])[..., np.newaxis]
         next_process_states = np.array([
-            np.stack([s["T_CAT"], s["H2_in_MolarFlow"], s["CH4_syn_MolarFlow"], s["H2_res_MolarFlow"], s["H2O_DE_MassFlow"], s["Elec_Heating"]])
+            np.stack([s["T_CAT"], s["H2_in_MolarFlow"], s["CH4_syn_MolarFlow"], s["H2_res_MolarFlow"], s["H2O_DE_MassFlow"], s["Elec_Heating"]], axis=-1)
             for s in next_states
         ])
         next_gas_eua_states = np.array([
-            np.stack([s["Gas_Price"], s["EUA_Price"]])
+            np.stack([s["Gas_Price"], s["EUA_Price"]], axis=-1)
             for s in next_states
         ])
         

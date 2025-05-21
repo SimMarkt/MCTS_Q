@@ -16,6 +16,7 @@ import numpy as np
 from tqdm import tqdm
 import torch
 import torch.nn.functional as F
+import gc
 
 
 from src.mctsq_config_dqn import DQNModel
@@ -161,6 +162,7 @@ class MCTS_Q:
             process_encoder_type=self.process_encoder_type,
             gas_eua_encoder_type=self.gas_eua_encoder_type,
             activation=self.activation,
+            learning_starts=self.learning_starts,
             seed=seed
         )
 
@@ -225,7 +227,13 @@ class MCTS_Q:
             value = self._evaluate(node.env)
             self._backpropagate(node, value)
 
-        return root_node.most_visited_child().action
+        best_action = root_node.most_visited_child().action
+
+        # Explicitly delete the tree to break reference cycles and clear memory
+        del root_node
+        gc.collect()
+
+        return best_action
     
     def _select(self, node):
         """

@@ -24,6 +24,7 @@ hidden_units : 128          # Number of hidden units in the DQN model
 buffer_size : 100000        # Size of the replay buffer
 batch_size : 64             # Batch size for training
 activation : "relu"         # Activation function for the DQN model ("relu", "tanh")
+learning_starts : 500       # Number of steps before starting to learn
 
 # Encoder hyperparameters
 seq_length : 30               # Length of the sequence for time-series encoding

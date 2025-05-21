@@ -15,7 +15,7 @@ str_inv : train             # Specifies the training results and models for a sp
 path : /logs/               # Path to save the MTCS_Q model
 
 train_steps : 1500000         # No. of training steps
-val_steps : 20000            # Validation interval: No. of steps between evaluations during training
+val_steps : 1000            # Validation interval: No. of steps between evaluations during training
 # Random seeds for reproducibility of neural network initialization and environment randomness:
 r_seed_train : [3654, 467, 9327, 5797, 249, 9419]         # Random seeds for the training set (default: [3654] for single-threaded computations)
 r_seed_test : [605, 5534, 2910, 7653, 8936, 1925]         # Random seeds for the validation set (default: [605] for single-threaded computations)

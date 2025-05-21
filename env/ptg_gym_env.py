@@ -759,8 +759,8 @@ class PTGEnv(gym.Env):
 
         for k, v in self.__dict__.items():
             # Debug: print attribute name and shape if it's a numpy array
-            if isinstance(v, np.ndarray):
-                print(f"Deepcopy: {k}, shape: {v.shape}, dtype: {v.dtype}")
+            # if isinstance(v, np.ndarray):
+            #     print(f"Deepcopy: {k}, shape: {v.shape}, dtype: {v.dtype}")
             if k in static_arrays:
                 setattr(result, k, v)
             else:

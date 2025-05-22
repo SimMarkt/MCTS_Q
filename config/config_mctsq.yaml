@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------------------------------------------
-# MCTS_Q: Monte Carlo Tree Search with Deep-Q-Network and Temporal Encoding
+# MCTS_Q: Monte Carlo Tree Search with Deep-Q-Network
 # GitHub Repository: https://github.com/SimMarkt/MCTS_Q
 #
 # config_mcts: 
@@ -8,7 +8,7 @@
 # ----------------------------------------------------------------------------------------------------------------
 
 # MCTS hyperparameters
-iterations : 100           # No. of iterations for MCTS
+iterations : 50           # No. of iterations for MCTS
 c_init : 1.0                # Initial exploration parameter for PUCT
 c_base : 10                # Parameter for exploration increase in PUCT
 maximum_depth : 72          # Maximum depth of the tree
@@ -24,7 +24,7 @@ hidden_units : 128          # Number of hidden units in the DQN model
 buffer_size : 100000        # Size of the replay buffer
 batch_size : 64             # Batch size for training
 activation : "relu"         # Activation function for the DQN model ("relu", "tanh")
-learning_starts : 500       # Number of steps before starting to learn
+learning_starts : 5       # Number of steps before starting to learn
 
 # Encoder hyperparameters
 seq_length : 30               # Length of the sequence for time-series encoding

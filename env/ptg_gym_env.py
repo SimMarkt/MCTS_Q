@@ -1,6 +1,6 @@
 # Custom Environment implementing the Gymnasium interface for PtG dispatch optimization.
 # Version 1.0
-# Modifications: Observations space with process data time-series data of the last time step
+# Modifications: Observation space with process time-series data of the last time step
 
 import gymnasium as gym
 from gymnasium import spaces
@@ -24,6 +24,7 @@ ep_index = 0
 
 #TODO: Include Meth_State and/or Action history in the observation space
 #TODO: Perhaps include temporal encoding in the observation space (sin/cos for minute within hour and hour within day)
+#TODO: Perhaps use truncate instead of terminated
 
 class PTGEnv(gym.Env):
     """Custom Environment implementing the Gymnasium interface for PtG dispatch optimization."""
@@ -460,6 +461,9 @@ class PTGEnv(gym.Env):
             info = self._get_info()
 
         self.k += 1
+
+        # PtGEnv uses only "terminated" because preliminary studies showed no performance difference 
+        # between using "terminated" and "truncated" episodes.
 
         return observation, reward, terminated, False, info
 

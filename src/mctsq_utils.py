@@ -1,8 +1,8 @@
 # ----------------------------------------------------------------------------------------------------------------
-# RL_PtG: Deep Reinforcement Learning for Power-to-Gas Dispatch Optimization
-# GitHub Repository: https://github.com/SimMarkt/RL_PtG
+# MCTS_Q: Monte Carlo Tree Search with Deep-Q-Network
+# GitHub Repository: https://github.com/SimMarkt/MCTS_Q
 #
-# rl_utils: 
+# mctsq_utils: 
 # > Utiliy/Helper functions
 # ----------------------------------------------------------------------------------------------------------------
 
@@ -14,9 +14,6 @@ from tqdm import tqdm
 import gymnasium as gym 
 
 from src.mctsq_opt import calculate_optimum
-
-#TODO: rew_u_b und rew_u_l immer über training set auch in RL_PtG
-#TODO in RL_PtG irgendwo comment einfügen, warum kein truncate sondern nur terminate
 
 def import_market_data(csvfile: str, type: str, path: str):
     """
@@ -452,6 +449,7 @@ class CallbackVal():
         self.val_steps = val_steps  
         self.stats = {'steps': [],
                       'cum_rew': []}
+        self.model = None
 
 
 def create_envs(env_id, env_kwargs_data, TrainConfig):
@@ -484,7 +482,7 @@ class Postprocessing():
         self.stats_dict_test = {}
         self.str_id = str_id
         self.model = model
-        model.load(TrainConfig.path + str_id + "/weights")
+        model.load(TrainConfig.log_path + str_id)
 
     def test_performance(self):
         """

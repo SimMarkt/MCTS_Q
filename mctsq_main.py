@@ -1,9 +1,9 @@
 # ----------------------------------------------------------------------------------------------------------------
-# RL_PtG: Deep Reinforcement Learning for Power-to-Gas Dispatch Optimization
-# GitHub Repository: https://github.com/SimMarkt/RL_PtG
+# MCTS_Q: Monte Carlo Tree Search with Deep-Q-Network
+# GitHub Repository: https://github.com/SimMarkt/MCTS_Q
 #
-# rl_main:
-# > Main script for training deep reinforcement learning (RL) algorithms on the PtG-CH4 dispatch task.
+# mctsq_main:
+# > Main script for training the MCTS_Q algorithm on the PtG-CH4 dispatch task.
 # > Adapts to different computational environments: a local personal computer ('pc') or a computing cluster with SLURM management ('slurm').
 # ----------------------------------------------------------------------------------------------------------------
 
@@ -21,6 +21,9 @@ from src.mctsq_config_train import TrainConfiguration
 from src.mctsq_config_mcts import MCTSQConfiguration, MCTS_Q
 
 #TODO: FOR TRAINING, VALIDATION AND TESTING ADD PRICE_PAST NUMBER OF VALUES AT THE BEGINNING OF THE TEST SET TO ALIGN WITH FORMER TESTS
+#TODO: Set up everything on HPC (Use RANGE instead of tqdm) and include real training data and test/validation data
+#TODO: Try out tensorboard and save and load of the model
+#TODO: Im einfachen MCTS nochmal ein Ergebnis einfügen als Abbildung
 
 def computational_resources(TrainConfig):
     """
@@ -29,6 +32,8 @@ def computational_resources(TrainConfig):
     """
     print("Set computational resources...")
     TrainConfig.path = os.path.dirname(__file__)
+    TrainConfig.log_path = TrainConfig.path + TrainConfig.log_path
+    TrainConfig.tb_path = TrainConfig.path + TrainConfig.tb_path
     if TrainConfig.com_conf == 'pc': 
         print("---Computation on local resources")
         TrainConfig.seed_train = TrainConfig.r_seed_train[0]
@@ -75,6 +80,9 @@ def main():
     computational_resources(TrainConfig)
 
     str_id = config_print(EnvConfig, TrainConfig, MCTSQConfig)
+
+    print(TrainConfig.log_path + str_id)
+    print(TrainConfig.tb_path + str_id)
     
     # -----------------------------------------------Preprocessing------------------------------------------------
     print("Preprocessing...")
@@ -95,7 +103,7 @@ def main():
 
     # -------------------------------------------Initialize MCTS_Q------------------------------------------------
     print("Initialize MCTS_Q agent...")
-    model = MCTS_Q(env_train, seed=TrainConfig.seed_train, config=MCTSQConfig)
+    model = MCTS_Q(env_train, seed=TrainConfig.seed_train, config=MCTSQConfig, tb_log=TrainConfig.tb_path + str_id)
 
     # -------------------------------------------Training of MCTS_Q-----------------------------------------------
     print("Training of MCTS_Q... >>>", str_id, "<<< \n")
@@ -104,9 +112,9 @@ def main():
     print("...finished training!\n")
 
     # ------------------------------------------------Save model--------------------------------------------------
-    if TrainConfig.model_conf == "save_model" or TrainConfig.model_conf == "save_load_model":
+    if TrainConfig.model_conf == "save_model":
         print("Save MCTS_Q agent under ./logs/ ... \n") 
-        model.save(TrainConfig.path + str_id + "/weights")
+        model.save(TrainConfig.log_path + str_id)
     
     # ----------------------------------------------Post-processing-----------------------------------------------
     print("Postprocessing...")

@@ -1,10 +1,9 @@
 # ----------------------------------------------------------------------------------------------------------------
-# RL_PtG: Deep Reinforcement Learning for Power-to-Gas Dispatch Optimization
-# GitHub Repository: https://github.com/SimMarkt/RL_PtG
+# MCTS_Q: Monte Carlo Tree Search with Deep-Q-Network
+# GitHub Repository: https://github.com/SimMarkt/MCTS_Q
 #
-# rl_config_env: 
+# mctsq_config_env: 
 # > Contains the configuration for the Power-to-Gas (PtG) process environment
-# > Converts the data from 'config_env.yaml' into a class object for further processing and usage
 # ----------------------------------------------------------------------------------------------------------------
 
 import yaml

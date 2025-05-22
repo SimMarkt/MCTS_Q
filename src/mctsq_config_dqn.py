@@ -1,9 +1,18 @@
+# ----------------------------------------------------------------------------------------------------------------
+# MCTS_Q: Monte Carlo Tree Search with Deep-Q-Network
+# GitHub Repository: https://github.com/SimMarkt/MCTS_Q
+#
+# mctsq_config_dqn: 
+# > Provides the Deep Q-Network model including different encoders for energy market and process data
+# ----------------------------------------------------------------------------------------------------------------
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 from collections import deque
 import random
+
 
 #TODO: Perhaps Include loss which minimizes the the difference between the MCTS policy and DQN policy and also the value (However, the DQN policy directly inferes from the value, not a distinct network -> perhaps not necessary)
 
@@ -303,7 +312,7 @@ class DQNModel:
             return q_values.argmax().item()
 
     def update(self):
-        if (len(self.replay_buffer) < self.batch_size) and (len(self.replay_buffer) < self.learning_starts):
+        if (len(self.replay_buffer) < self.batch_size) or (len(self.replay_buffer) < self.learning_starts):
             return
 
         # Unpack buffer: states should be tuples (price_state, process_state)
@@ -360,24 +369,35 @@ class DQNModel:
     
     def save(self, filepath):
         """
-        Save the policy network, target network, optimizer, and epsilon.
+        Save the policy network, target network, optimizer, epsilon, and replay buffer.
         """
         torch.save({
             'policy_net_state_dict': self.policy_net.state_dict(),
             'target_net_state_dict': self.target_net.state_dict(),
             'optimizer_state_dict': self.optimizer.state_dict(),
-            'epsilon': self.epsilon
+            'epsilon': self.epsilon,
+            'replay_buffer_data': {
+                'buffer': list(self.replay_buffer.buffer),
+                'priorities': list(self.replay_buffer.priorities),
+                'alpha': self.replay_buffer.alpha,
+                'capacity': self.replay_buffer.buffer.maxlen
+            }
         }, filepath)
 
     def load(self, filepath):
         """
-        Load the policy network, target network, optimizer, and epsilon.
+        Load the policy network, target network, optimizer, epsilon, and replay buffer.
         """
         checkpoint = torch.load(filepath, map_location='cpu')
         self.policy_net.load_state_dict(checkpoint['policy_net_state_dict'])
         self.target_net.load_state_dict(checkpoint['target_net_state_dict'])
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         self.epsilon = checkpoint.get('epsilon', self.epsilon)
+        if 'replay_buffer_data' in checkpoint:
+            data = checkpoint['replay_buffer_data']
+            self.replay_buffer = PrioritizedReplayBuffer(data['capacity'], alpha=data['alpha'])
+            self.replay_buffer.buffer = deque(data['buffer'], maxlen=data['capacity'])
+            self.replay_buffer.priorities = deque(data['priorities'], maxlen=data['capacity'])
 
     def update_target_network(self):
         self.target_net.load_state_dict(self.policy_net.state_dict())

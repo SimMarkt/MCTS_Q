@@ -1,10 +1,9 @@
 # ----------------------------------------------------------------------------------------------------------------
-# RL_PtG: Power-to-Gas Dispatch Optimization using Monte Carlo Tree Search (MCTS)
-# GitHub Repository: https://github.com/SimMarkt/MCTS_PtG
+# MCTS_Q: Monte Carlo Tree Search with Deep-Q-Network
+# GitHub Repository: https://github.com/SimMarkt/MCTS_Q
 #
-# ptg_config_mcts: 
-# > Contains the source code for the MCTS algorithm with a node class and mcts class
-# > Converts the data from 'config_mcts.yaml' into a class object for further processing and usage
+# mctsq_config_mcts: 
+# > Incorporates the MCTS algorithm with DQN guidance on tree search
 # ----------------------------------------------------------------------------------------------------------------
 
 import math
@@ -17,15 +16,13 @@ from tqdm import tqdm
 import torch
 import torch.nn.functional as F
 import gc
-
+import multiprocessing
+from torch.utils.tensorboard import SummaryWriter
 
 from src.mctsq_config_dqn import DQNModel
 
 #TODO: Include random seeds
 #TODO: Include deterministic=True für validation and testing??
-#TODO: Write stats during training and evaluation into tensorboard file
-#TODO: ADJUST INPUT_DIMENSION FOR DQN MODEL
-#TODO: Also save and load replay buffer
 
 class MCTSQConfiguration():
     """
@@ -113,7 +110,7 @@ class MCTSQConfiguration():
 
 
 class MCTS_Q:
-    def __init__(self, env_train, seed, config=None):
+    def __init__(self, env_train, seed, config=None, tb_log=None):
         """
         Initialize MCTS_Q with the training environment and DQN agent.
         :param env_train: The training environment
@@ -130,6 +127,11 @@ class MCTS_Q:
             self.__dict__.update(mctsq_config)
 
         self.env_train = env_train
+
+        self.tb_log = tb_log
+        self.writer = None
+        if self.tb_log is not None:
+            self.writer = SummaryWriter(log_dir=self.tb_log)
 
         # Load the environment configuration from the YAML file
         with open("config/config_env.yaml", "r") as env_file:
@@ -179,6 +181,8 @@ class MCTS_Q:
 
         state, _ = self.env_train.reset()      
 
+        self.eval_processes = []
+
         for self.step in tqdm(range(total_timesteps), desc='---Training MCTS_Q:'):
             
             # Perform step based on MCTS with DQN values
@@ -192,23 +196,51 @@ class MCTS_Q:
             state = next_state
             if terminated:
                 break
+
+            # # Evaluate the policy (in parallel, non-blocking)
+            # if callback is not None:
+            #     if self.step % callback.val_steps == 0 and self.step != 0:
+            #         callback.model = self   # Set the MCTS_Q model for the callback
+            #         result_queue = multiprocessing.Queue()
+            #         p = multiprocessing.Process(
+            #             target=run_callback_eval,
+            #             args=(self.step, callback, result_queue)
+            #         )
+            #         p.start()
+            #         self.eval_processes.append((p, result_queue))
+
+            # # Check for finished evaluation processes and collect results
+            # for proc, queue in self.eval_processes[:]:
+            #     if not proc.is_alive():
+            #         proc.join()
+            #         if not queue.empty():
+            #             step_eval, cum_reward_call = queue.get()
+            #             callback.stats.append(step_eval, cum_reward_call)
+            #             print(f"   >>Cumulative Reward {cum_reward_call}")
+            #         self.eval_processes.remove((proc, queue))
             
-            # Evaluate the policy
+            # Evaluate the policy (In Serial processing)
             if callback is not None:
                 if self.step % callback.val_steps == 0 and self.step != 0:
                     state_call, _ = callback.env.reset()
                     cum_reward_call = 0 
 
-                    for _ in range(callback.env.ep_length):
+                    for _ in tqdm(range(callback.env.eps_sim_steps), desc='   >>Validation:'):
                         action_call = self.predict(callback.env)
                         _, reward_call, terminated_call, _, _ = callback.env.step(action_call)
                         cum_reward_call += reward_call
                         if terminated_call:
                             break
 
-                    callback.stats.append(self.step, cum_reward_call)
-                    print(f" Validation: Cumulative Reward {cum_reward_call}")
-            
+                    # callback.stats['steps'].append(self.step)
+                    # callback.stats['cum_rew'].append(cum_reward_call)
+                    print(f"   >>Cumulative Reward {cum_reward_call}")
+
+                    if self.writer is not None:
+                        self.writer.add_scalar("Validation/CumulativeReward", cum_reward_call, global_step=self.step)
+
+        if self.writer is not None:
+            self.writer.close()
 
     def predict(self, env, deterministic=False):
         """
@@ -423,4 +455,17 @@ class MCTSNode:
         :return: The child node with the highest number of visits
         """
         return max(self.children, key=lambda child: child.visits)
+    
+
+def run_callback_eval(step, callback, result_queue):
+    state_call, _ = callback.env.reset()
+    cum_reward_call = 0
+    for _ in tqdm(range(callback.env.eps_sim_steps), desc='   >>Validation:'): # range(callback.env.eps_sim_steps): 
+        action_call = callback.model.predict(callback.env)
+        _, reward_call, terminated_call, _, _ = callback.env.step(action_call)
+        cum_reward_call += reward_call
+        if terminated_call:
+            break
+    # Send results back to main process
+    result_queue.put((step, cum_reward_call))
      

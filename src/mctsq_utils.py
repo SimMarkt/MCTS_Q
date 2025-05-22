@@ -482,7 +482,6 @@ class Postprocessing():
         self.stats_dict_test = {}
         self.str_id = str_id
         self.model = model
-        model.load(TrainConfig.log_path + str_id)
 
     def test_performance(self):
         """
@@ -490,12 +489,12 @@ class Postprocessing():
         """
         stats = np.zeros((self.eps_sim_steps_test, len(self.EnvConfig.stats_names)))
 
-        obs = self.env_test_post.reset()
+        _, _ = self.env_test_post.reset()
         timesteps = self.eps_sim_steps_test#  - 6
 
         for i in tqdm(range(timesteps), desc='---Apply MCTS_Q on the test environment:'):
-            action, _ = self.model.predict(obs, deterministic=True)
-            obs, _ , terminated, info = self.env_test_post.step(action)
+            action, _ = self.model.predict(self.env_test_post)
+            _, _, terminated, _, info = self.env_test_post.step(action)
 
             # Store data in stats
             if not terminated:

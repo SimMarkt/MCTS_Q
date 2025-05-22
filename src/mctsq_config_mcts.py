@@ -23,6 +23,7 @@ from src.mctsq_config_dqn import DQNModel
 
 #TODO: Include random seeds
 #TODO: Include deterministic=True für validation and testing??
+#TODO: only store best model
 
 class MCTSQConfiguration():
     """
@@ -104,10 +105,10 @@ class MCTSQConfiguration():
 
 
 class MCTS_Q:
-    def __init__(self, env_train, seed, config=None, tb_log=None):
+    def __init__(self, env, seed, config=None, tb_log=None):
         """
         Initialize MCTS_Q with the training environment and DQN agent.
-        :param env_train: The training environment
+        :param env: The environment
         :param dqn: The DQN model for support of MCTS action selection
         :param seed: Random seed for reproducibility
         :param config: MCTSQConfig instance
@@ -120,7 +121,7 @@ class MCTS_Q:
                 mctsq_config = yaml.safe_load(env_file)
             self.__dict__.update(mctsq_config)
 
-        self.env_train = env_train
+        self.env = env
 
         self.tb_log = tb_log
         self.writer = None
@@ -137,7 +138,7 @@ class MCTS_Q:
         temporal_encodings = 2                  # Temporal encoding with two additional features (sin/cos)
 
         # Initialize the DQN model
-        action_dim = env_train.action_space.n
+        action_dim = env.action_space.n
 
         self.dqn = DQNModel(
             el_input_dim=el_input_dim+temporal_encodings, 
@@ -170,15 +171,15 @@ class MCTS_Q:
         :param callback: Callback function for evaluation
         """
 
-        state, _ = self.env_train.reset()      
+        state, _ = self.env.reset()      
 
         self.eval_processes = []
 
         for self.step in tqdm(range(total_timesteps), desc='---Training MCTS_Q:'):
             
             # Perform step based on MCTS with DQN values
-            action = self.predict(self.env_train)
-            next_state, reward, terminated, _, _ = self.env_train.step(action)
+            action = self.predict(self.env)
+            next_state, reward, terminated, _, _ = self.env.step(action)
 
             # Train DQN parameter
             self.dqn.replay_buffer.push(state, action, reward, next_state, terminated)
@@ -291,7 +292,6 @@ class MCTS_Q:
                 # Compute PUCT score
                 child.puct_score = (
                     mean_q_value + c_puct * prior_prob * math.sqrt(total_visits) / (1 + child.visits)
-                    #TODO: Include auto exploration adjustment
                 )
 
             # Select the child with the highest PUCT score
@@ -391,6 +391,47 @@ class MCTS_Q:
         """
         self.dqn.load(filepath)
 
+    def test(self, EnvConfig, eps_sim_steps_test):
+        """
+            Test MCTS_Q on the test environment
+        """
+        _, _ = self.env.reset()  
+
+        stats = np.zeros((eps_sim_steps_test, len(EnvConfig.stats_names)))    
+        stats_dict_test={}
+
+        for i in tqdm(range(eps_sim_steps_test), desc='---Apply MCTS_Q on the test environment:'):
+            
+            # Perform step based on MCTS with DQN values
+            action = self.predict(self.env)
+            _, _, terminated, _, info = self.env.step(action)
+
+            if terminated:
+                break
+            else:
+                j = 0
+                for val in info:
+                    if j < 24:
+                        if val == 'Meth_Action':
+                            if info[val] == 'standby':
+                                stats[i, j] = 0
+                            elif info[val] == 'cooldown':
+                                stats[i, j] = 1
+                            elif info[val] == 'startup':
+                                stats[i, j] = 2
+                            elif info[val] == 'partial_load':
+                                stats[i, j] = 3
+                            else:
+                                stats[i, j] = 4
+                        else:
+                            stats[i, j] = info[val]
+                    j += 1
+            
+        for m in range(len(EnvConfig.stats_names)):
+            stats_dict_test[EnvConfig.stats_names[m]] = stats[:(eps_sim_steps_test), m]
+        
+        return stats_dict_test
+
 
 class MCTSNode:
     def __init__(self, env, parent=None, action=None, done=False, remaining_steps=42, total_steps=42, depth=0, maximum_depth=42):
@@ -450,7 +491,6 @@ class MCTSNode:
         """
         return max(self.children, key=lambda child: child.visits)
     
-
 def run_callback_eval(step, callback, result_queue):
     state_call, _ = callback.env.reset()
     cum_reward_call = 0

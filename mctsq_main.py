@@ -117,6 +117,8 @@ def main():
     print("Postprocessing...")
     model_test = MCTS_Q(env_test_post, seed=TrainConfig.seed_train, config=MCTSQConfig, tb_log=TrainConfig.tb_path + str_id)
     model_test.load(TrainConfig.log_path + str_id)                                                      # Load pretrained model parameters
+
+    model_test.test(EnvConfig, Preprocess.eps_sim_steps_test)
     PostProcess = Postprocessing(str_id, EnvConfig, TrainConfig, env_test_post, Preprocess, model_test)
     PostProcess.test_performance()
     PostProcess.plot_results()

@@ -16,15 +16,13 @@ maximum_depth : 72          # Maximum depth of the tree
 # Q-Learning hyperparameters
 learning_rate : 0.001       # Learning rate
 discount_factor : 0.99      # Discount factor for future rewards
-epsilon_start : 1.0         # Initial exploration rate
-epsilon_end : 0.1           # Final exploration rate
-epsilon_decay : 0.995       # Decay rate for exploration
 hidden_layers : 2           # Number of hidden layers in the MLP head of the DQN model
 hidden_units : 128          # Number of hidden units in the DQN model
 buffer_size : 100000        # Size of the replay buffer
 batch_size : 64             # Batch size for training
 activation : "relu"         # Activation function for the DQN model ("relu", "tanh")
-learning_starts : 5       # Number of steps before starting to learn
+learning_starts : 5         # Number of steps before starting to learn
+target_update : 100         # Interval for updating the target network parameters
 
 # Encoder hyperparameters
 seq_length : 30               # Length of the sequence for time-series encoding

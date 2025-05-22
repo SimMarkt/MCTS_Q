@@ -49,9 +49,6 @@ class MCTSQConfiguration():
                       'Max Tree depth': {'abb' :"_al", 'var': 'maximum_depth'},
                       'Learning rate': {'abb' :"_al", 'var': 'learning_rate'},
                       'Discount factor': {'abb' :"_ga", 'var': 'discount_factor'},
-                      'Initial exploration coefficient': {'abb' :"_ie", 'var': 'epsilon_start'},
-                      'Final exploration coefficient': {'abb' :"_fe", 'var': 'epsilon_end'},
-                      'Decay rate for exploration': {'abb' :"_re", 'var': 'epsilon_decay'},
                       'Replay buffer size': {'abb' :"_rb", 'var': 'buffer_size'},
                       'Batch size': {'abb' :"_bs", 'var': 'batch_size'},
                       'Hidden layers': {'abb' :"_hl", 'var': 'hidden_layers'},
@@ -218,6 +215,9 @@ class MCTS_Q:
             #             callback.stats.append(step_eval, cum_reward_call)
             #             print(f"   >>Cumulative Reward {cum_reward_call}")
             #         self.eval_processes.remove((proc, queue))
+
+            if self.step % self.target_update == 0 and self.step != 0:
+                self.dqn.update_target_network()
             
             # Evaluate the policy (In Serial processing)
             if callback is not None:

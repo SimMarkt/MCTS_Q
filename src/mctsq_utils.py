@@ -486,14 +486,14 @@ class Postprocessing():
 
     def test_performance(self):
         """
-            Test RL policy on the test environment
+            Test MCTS_Q on the test environment
         """
         stats = np.zeros((self.eps_sim_steps_test, len(self.EnvConfig.stats_names)))
 
         obs = self.env_test_post.reset()
         timesteps = self.eps_sim_steps_test#  - 6
 
-        for i in tqdm(range(timesteps), desc='---Apply RL policy on the test environment:'):
+        for i in tqdm(range(timesteps), desc='---Apply MCTS_Q on the test environment:'):
             action, _ = self.model.predict(obs, deterministic=True)
             obs, _ , terminated, info = self.env_test_post.step(action)
 

@@ -21,7 +21,7 @@ model_conf : save_model     # Model configuration options:
                             # 'load_model': Load a pretrained RL model and continue training
                             # 'save_load_model': Load a pretrained RL model, continue training, and save the updated model
 
-train_steps : 21         # No. of training steps
+train_steps : 11         # No. of training steps
 val_steps : 10            # Validation interval: No. of steps between evaluations during training
 # Random seeds for reproducibility of neural network initialization and environment randomness:
 r_seed_train : [3654, 467, 9327, 5797, 249, 9419]         # Random seeds for the training set (default: [3654] for single-threaded computations)

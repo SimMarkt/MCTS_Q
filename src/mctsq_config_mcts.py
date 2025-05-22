@@ -44,9 +44,9 @@ class MCTSQConfiguration():
         # Nested dictionary with hyperparameters, including abbreviation ('abb') and variable name ('var') 
         # 'var' must match the notation in MCTS_Q/config/config_mctsq.yaml
         self.hyper = {'Iterations': {'abb' :"_it", 'var': 'iterations'},
-                      'PUCT Initial Exploration': {'abb' :"_al", 'var': 'c_init'},
-                      'PUCT Exploration Increase': {'abb' :"_al", 'var': 'c_base'},
-                      'Max Tree depth': {'abb' :"_al", 'var': 'maximum_depth'},
+                      'PUCT Initial Exploration': {'abb' :"_pu", 'var': 'c_init'},
+                      'PUCT Exploration Increase': {'abb' :"_pi", 'var': 'c_base'},
+                      'Max Tree depth': {'abb' :"_md", 'var': 'maximum_depth'},
                       'Learning rate': {'abb' :"_al", 'var': 'learning_rate'},
                       'Discount factor': {'abb' :"_ga", 'var': 'discount_factor'},
                       'Replay buffer size': {'abb' :"_rb", 'var': 'buffer_size'},
@@ -75,9 +75,6 @@ class MCTSQConfiguration():
         self.hyp_print('Max Tree depth')
         self.hyp_print('Learning rate')
         self.hyp_print('Discount factor')
-        self.hyp_print('Initial exploration coefficient')
-        self.hyp_print('Final exploration coefficient')
-        self.hyp_print('Decay rate for exploration')
         self.hyp_print('Replay buffer size')
         self.hyp_print('Batch size')
         self.hyp_print('Hidden layers')
@@ -154,9 +151,6 @@ class MCTS_Q:
             batch_size=self.batch_size,
             gamma=self.discount_factor,
             lr=self.learning_rate,
-            epsilon_start=self.epsilon_start,
-            epsilon_end=self.epsilon_end,
-            epsilon_decay=self.epsilon_decay,
             price_encoder_type=self.price_encoder_type,
             process_encoder_type=self.process_encoder_type,
             gas_eua_encoder_type=self.gas_eua_encoder_type,

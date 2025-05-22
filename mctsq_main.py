@@ -80,9 +80,6 @@ def main():
     computational_resources(TrainConfig)
 
     str_id = config_print(EnvConfig, TrainConfig, MCTSQConfig)
-
-    print(TrainConfig.log_path + str_id)
-    print(TrainConfig.tb_path + str_id)
     
     # -----------------------------------------------Preprocessing------------------------------------------------
     print("Preprocessing...")
@@ -118,7 +115,9 @@ def main():
     
     # ----------------------------------------------Post-processing-----------------------------------------------
     print("Postprocessing...")
-    PostProcess = Postprocessing(str_id, EnvConfig, TrainConfig, env_test_post, Preprocess, model)
+    model_test = MCTS_Q(env_test_post, seed=TrainConfig.seed_train, config=MCTSQConfig, tb_log=TrainConfig.tb_path + str_id)
+    model_test.load(TrainConfig.log_path + str_id)                                                      # Load pretrained model parameters
+    PostProcess = Postprocessing(str_id, EnvConfig, TrainConfig, env_test_post, Preprocess, model_test)
     PostProcess.test_performance()
     PostProcess.plot_results()
 

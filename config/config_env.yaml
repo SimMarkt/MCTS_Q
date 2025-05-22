@@ -1,7 +1,7 @@
 # ----------------------------------------------------------------------------------------------------------------
-# RL_PtG: Deep Reinforcement Learning for Power-to-Gas Dispatch Optimization
-# Reference: https://github.com/SimMarkt/RL_PtG
-
+# MCTS_Q: Monte Carlo Tree Search with Deep-Q-Network
+# GitHub Repository: https://github.com/SimMarkt/MCTS_Q
+#
 # config_env: 
 # > Configuration file for the PtG environment, covering three distinct economic business scenarios:
 # > Scenario 1: Involves trading in the electricity, gas, and emission spot markets.
@@ -35,16 +35,16 @@ sim_step : 600                  # Frequency of taking actions [s]
 # (_train: training set; _val: validation set; _test: test set)
 # _el: electricity spot market data in [h]
 datafile_path_train_el : /data/spot_market_data/data-day-ahead-el-train.csv
-datafile_path_val_el : /data/spot_market_data/data-day-ahead-el-val.csv
-datafile_path_test_el : /data/spot_market_data/data-day-ahead-el-test.csv
+datafile_path_val_el : /data/spot_market_data/data-day-ahead-el-test_short.csv # /data/spot_market_data/data-day-ahead-el-val.csv
+datafile_path_test_el : /data/spot_market_data/data-day-ahead-el-test_short.csv
 # _gas: natural gas/SNG spot market data in [d]
 datafile_path_train_gas : /data/spot_market_data/data-day-ahead-gas-train.csv
-datafile_path_val_gas : /data/spot_market_data/data-day-ahead-gas-val.csv
-datafile_path_test_gas : /data/spot_market_data/data-day-ahead-gas-test.csv
+datafile_path_val_gas : /data/spot_market_data/data-day-ahead-gas-test_short.csv # /data/spot_market_data/data-day-ahead-gas-val.csv
+datafile_path_test_gas : /data/spot_market_data/data-day-ahead-gas-test_short.csv
 # _eua: European emission allowances (EUA) spot market data in [d]
 datafile_path_train_eua : /data/spot_market_data/data-day-ahead-eua-train.csv
-datafile_path_val_eua : /data/spot_market_data/data-day-ahead-eua-val.csv
-datafile_path_test_eua : /data/spot_market_data/data-day-ahead-eua-test.csv
+datafile_path_val_eua : /data/spot_market_data/data-day-ahead-eua-test_short.csv # /data/spot_market_data/data-day-ahead-eua-val.csv
+datafile_path_test_eua : /data/spot_market_data/data-day-ahead-eua-test_short.csv
 
 # File paths to process data for the dynamic data-based process model of the methanation plant:
 # Process data w.r.t. the load levels OP1 and OP2

@@ -1,10 +1,9 @@
 # ----------------------------------------------------------------------------------------------------------------
-# RL_PtG: Deep Reinforcement Learning for Power-to-Gas Dispatch Optimization
-# GitHub Repository: https://github.com/SimMarkt/RL_PtG
+# MCTS_Q: Monte Carlo Tree Search with Deep-Q-Network
+# GitHub Repository: https://github.com/SimMarkt/MCTS_Q
 #
-# rl_config_train: 
-# > Manages the configuration and settings for RL training.
-# > Converts data from 'config_train.yaml' into a class object for further processing
+# mctsq_config_train: 
+# > Manages the configuration and settings for MCTS_Q training.
 # ----------------------------------------------------------------------------------------------------------------
 
 import yaml
@@ -19,7 +18,7 @@ class TrainConfiguration:
         self.__dict__.update(train_config)
         
         # Initialize key attributes
-        self.path = None                        # RL_PtG folder path
+        self.path = None                        # MCTS_Q folder path
         self.slurm_id = None                    # SLURM ID of a specific thread
         com_set = ['pc', 'slurm']
         

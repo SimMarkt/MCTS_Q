@@ -1,4 +1,4 @@
-# RL_PtG
+# MCTS_Q
 
 The **RL_PtG** project provides a framework for the economic optimization of Power-to-Gas (PtG) dispatch using Deep Reinforcement Learning (RL). PtG is a technology that enables the chemical energy storage of renewable energy in chemical energy carriers such as hydrogen (H<sub>2</sub>) or methane (CH<sub>4</sub>). **RL_PtG** facilitates the training of state-of-the-art deep RL algorithms for the optimal control of PtG plants, based on process data and Day-ahead electricity, natural gas, and emissions spot market data.  
 

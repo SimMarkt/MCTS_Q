@@ -1,8 +1,8 @@
 # ----------------------------------------------------------------------------------------------------------------
-# RL_PtG: Deep Reinforcement Learning for Power-to-Gas Dispatch Optimization
-# GitHub Repository: https://github.com/SimMarkt/RL_PtG
+# MCTS_Q: Monte Carlo Tree Search with Deep-Q-Network
+# GitHub Repository: https://github.com/SimMarkt/MCTS_Q
 #
-# rl_opt: 
+# mctsq_opt: 
 # > Computes the potential rewards, the load identifiers, and the theoretical optimum T-OPT ignoring plant dynamics.
 # ----------------------------------------------------------------------------------------------------------------
 

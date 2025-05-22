@@ -1,7 +1,7 @@
 # ----------------------------------------------------------------------------------------------------------------
-# RL_PtG: Deep Reinforcement Learning for Power-to-Gas Dispatch Optimization
-# https://github.com/SimMarkt/RL_PtG
-
+# MCTS_Q: Monte Carlo Tree Search with Deep-Q-Network
+# GitHub Repository: https://github.com/SimMarkt/MCTS_Q
+#
 # config_train: 
 # > Configuration file for setting up training
 # ----------------------------------------------------------------------------------------------------------------
@@ -12,10 +12,17 @@ device : auto               # Computational device to use: ['cpu', 'cuda', 'auto
                             # 'auto' selects GPU if available, otherwise defaults to CPU
 str_inv : train             # Specifies the training results and models for a specific investigation
 
-path : /logs/               # Path to save the MTCS_Q model
+log_path : /logs/           # Path to save the MTCS_Q model
+tb_path : /tensorboard/     # Tensorboard path
 
-train_steps : 1500000         # No. of training steps
-val_steps : 1000            # Validation interval: No. of steps between evaluations during training
+model_conf : save_model     # Model configuration options: 
+                            # 'simple_train': Train the RL model from scratch
+                            # 'save_model': Train the RL model from scratch and save it afterward
+                            # 'load_model': Load a pretrained RL model and continue training
+                            # 'save_load_model': Load a pretrained RL model, continue training, and save the updated model
+
+train_steps : 11         # No. of training steps
+val_steps : 10            # Validation interval: No. of steps between evaluations during training
 # Random seeds for reproducibility of neural network initialization and environment randomness:
 r_seed_train : [3654, 467, 9327, 5797, 249, 9419]         # Random seeds for the training set (default: [3654] for single-threaded computations)
 r_seed_test : [605, 5534, 2910, 7653, 8936, 1925]         # Random seeds for the validation set (default: [605] for single-threaded computations)

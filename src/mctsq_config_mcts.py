@@ -19,6 +19,8 @@ import gc
 import multiprocessing
 from torch.utils.tensorboard import SummaryWriter
 
+import time
+
 from src.mctsq_config_dqn import DQNModel
 
 #TODO: Include random seeds
@@ -160,9 +162,22 @@ class MCTS_Q:
             seed=seed
         )
 
+        # TorchScript: Script the policy network for faster inference
+        self.dqn.policy_net = torch.jit.script(self.dqn.policy_net)
+
         self.action_type = "discrete"
 
-        self.deterministic = False 
+        self.deterministic = False
+
+        self.time_deepcopy = 0
+        self.time_step = 0
+        self.time_mcts_core = 0
+        self.time_select = 0
+        self.time_expand = 0
+        self.time_eva = 0
+        self.time_back = 0
+        self.time_inf = 0
+         
 
     def learn(self, total_timesteps, callback):
         """
@@ -176,10 +191,22 @@ class MCTS_Q:
         self.eval_processes = []
 
         for self.step in tqdm(range(total_timesteps), desc='---Training MCTS_Q:'):
-            
+            start_total = time.time()
+            self.time_deepcopy = 0
+            self.time_step = 0
+            self.time_mcts_core = 0
+            self.time_select = 0
+            self.time_expand = 0
+            self.time_eva = 0
+            self.time_back = 0
+            self.time_inf = 0
+
             # Perform step based on MCTS with DQN values
             action = self.predict(self.env)
+            start_step = time.time()
             next_state, reward, terminated, _, _ = self.env.step(action)
+            step_duration = time.time() - start_step
+            self.time_step += step_duration
 
             # Train DQN parameter
             self.dqn.replay_buffer.push(state, action, reward, next_state, terminated)
@@ -237,6 +264,18 @@ class MCTS_Q:
                     if self.writer is not None:
                         self.writer.add_scalar("Validation/CumulativeReward", cum_reward_call, global_step=self.step)
 
+            total_duration = time.time() - start_total
+            print("[DEBUG] Time Analysis-----------")
+            print(f"     mcts core: {self.time_mcts_core/total_duration * 100}%")
+            print(f"     select: {self.time_select/total_duration * 100}%")
+            print(f"     expand core: {self.time_expand/total_duration * 100}%")
+            print(f"     eva core: {self.time_eva/total_duration * 100}%")
+            print(f"     back core: {self.time_back/total_duration * 100}%")
+            print(f"\n     deepcopy: {self.time_deepcopy/total_duration * 100}%")
+            print(f"     step: {self.time_step/total_duration * 100}%")
+            print(f"     inf: {self.time_inf/total_duration * 100}%")
+
+
         if self.writer is not None:
             self.writer.close()
 
@@ -246,16 +285,39 @@ class MCTS_Q:
         :param env: The environment to search in
         """
         self.deterministic = deterministic
-
+        # start_deepcopy = time.time()
         root_env_copy = copy.deepcopy(env)
+        # deepcopy_duration = time.time() - start_deepcopy
+        # self.time_deepcopy += deepcopy_duration
+
+
         root_node = MCTSNode(root_env_copy, maximum_depth=self.maximum_depth)
 
+        start_mcts_core = time.time()
         for _ in range(self.iterations):
+            start_select = time.time()
             node = self._select(root_node)
+            select_duration = time.time() - start_select
+            self.time_select += select_duration
+            
             if not node.is_terminal():
+                start_expand = time.time()
                 node = self._expand(node)
+                expand_duration = time.time() - start_expand
+                self.time_expand += expand_duration
+
+            start_eva = time.time()
             value = self._evaluate(node.env)
+            eva_duration = time.time() - start_eva
+            self.time_eva += eva_duration
+
+            start_back = time.time()
             self._backpropagate(node, value)
+            back_duration = time.time() - start_back
+            self.time_back += back_duration
+
+        mcts_core_duration = time.time() - start_mcts_core
+        self.time_mcts_core += mcts_core_duration
 
         best_action = root_node.most_visited_child().action
 
@@ -280,14 +342,18 @@ class MCTS_Q:
             # Compute exploration adjustment C(s)
             c_puct = math.log((1 + total_visits + c_base) / c_base) + c_init
 
+            # Serial inference
             for child in node.children:
                 # Use the DQN model's Q-values for the prior policy
 
                 price_state, process_state, gas_eua_state = self._get_state(node.env)  # Get the state representation
 
+                start_inf = time.time()
                 with torch.no_grad():
                     q_values = self.dqn.policy_net(price_state, process_state, gas_eua_state)
                 prior_prob = F.softmax(q_values, dim=-1)[0, child.action].item()
+                inf_duration = time.time() - start_inf
+                self.time_inf += inf_duration
 
                 # Compute the mean Q-value for the child node
                 mean_q_value = child.total_value / child.visits if child.visits > 0 else 0
@@ -296,6 +362,35 @@ class MCTS_Q:
                 child.puct_score = (
                     mean_q_value + c_puct * prior_prob * math.sqrt(total_visits) / (1 + child.visits)
                 )
+
+            # # --- Batch inference for all children ---
+            # price_states, process_states, gas_eua_states = [], [], []
+            # actions = []
+            # for child in node.children:
+            #     price_state, process_state, gas_eua_state = self._get_state(node.env)
+            #     price_states.append(price_state)
+            #     process_states.append(process_state)
+            #     gas_eua_states.append(gas_eua_state)
+            #     actions.append(child.action)
+
+            # # Concatenate tensors along batch dimension
+            # price_states = torch.cat(price_states, dim=0)
+            # process_states = torch.cat(process_states, dim=0)
+            # gas_eua_states = torch.cat(gas_eua_states, dim=0)
+
+            # start_inf = time.time()
+            # with torch.no_grad():
+            #     q_values_batch = self.dqn.policy_net(price_states, process_states, gas_eua_states)  # (num_children, num_actions)
+            #     prior_probs = F.softmax(q_values_batch, dim=-1)  # (num_children, num_actions)
+            # inf_duration = time.time() - start_inf
+            # self.time_inf += inf_duration
+
+            # for idx, child in enumerate(node.children):
+            #     prior_prob = prior_probs[idx, actions[idx]].item()
+            #     mean_q_value = child.total_value / child.visits if child.visits > 0 else 0
+            #     child.puct_score = (
+            #         mean_q_value + c_puct * prior_prob * math.sqrt(total_visits) / (1 + child.visits)
+            #     )
 
             # Select the child with the highest PUCT score
             node = max(node.children, key=lambda child: child.puct_score)
@@ -317,8 +412,14 @@ class MCTS_Q:
 
         # Select a random untried action
         action = random.choice(untried_actions)
+        start_deepcopy = time.time()
         new_env = copy.deepcopy(node.env)
+        deepcopy_duration = time.time() - start_deepcopy
+        self.time_deepcopy += deepcopy_duration
+        start_step = time.time()
         _, _, terminated, truncated, _ = new_env.step(action)
+        step_duration = time.time() - start_step
+        self.time_step += step_duration
         done = terminated or truncated
         child_node = MCTSNode(
             new_env, parent=node, action=action, done=done, maximum_depth=self.maximum_depth

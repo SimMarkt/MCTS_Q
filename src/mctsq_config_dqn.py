@@ -178,10 +178,10 @@ class TripleEncoderDQN(nn.Module):
         input_dim = embed_dim * 3
         act = get_activation(activation)
         for i in range(hidden_layers):
-            fc_layers.append(nn.Linear(input_dim, hidden_units))
+            fc_layers.append(nn.Linear(int(input_dim), int(hidden_units)))
             fc_layers.append(act)
             input_dim = hidden_units
-        fc_layers.append(nn.Linear(hidden_units, action_dim))
+        fc_layers.append(nn.Linear(int(hidden_units), int(action_dim)))
         self.fc_layers = nn.Sequential(*fc_layers)
 
     def forward(self, price_data, process_data, gas_eua_data, 

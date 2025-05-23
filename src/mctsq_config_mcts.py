@@ -183,7 +183,10 @@ class MCTS_Q:
 
             # Train DQN parameter
             self.dqn.replay_buffer.push(state, action, reward, next_state, terminated)
-            self.dqn.update()
+            loss = self.dqn.update()
+
+            if (self.writer is not None) and (loss is not None):
+                self.writer.add_scalar("Training/Loss", loss, global_step=self.step)
 
             state = next_state
             if terminated:

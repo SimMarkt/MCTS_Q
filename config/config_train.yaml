@@ -15,15 +15,15 @@ str_inv : train             # Specifies the training results and models for a sp
 log_path : /logs/           # Path to save the MTCS_Q model
 tb_path : /tensorboard/     # Tensorboard path
 
-model_conf : test_model   # Model configuration options: 
+model_conf : save_model   # Model configuration options: 
                             # 'simple_train': Train the model from scratch
                             # 'save_model': Train the model from scratch and save it afterward
                             # 'load_model': Load a pretrained model and continue training
                             # 'save_load_model': Load a pretrained model, continue training, and save the updated model
                             # 'test_model': Load a pretrained model and test its performance
 
-train_steps : 11         # No. of training steps
-val_steps : 10            # Validation interval: No. of steps between evaluations during training
+train_steps : 5001         # No. of training steps
+val_steps : 5000            # Validation interval: No. of steps between evaluations during training
 # Random seeds for reproducibility of neural network initialization and environment randomness:
 r_seed_train : [3654, 467, 9327, 5797, 249, 9419]         # Random seeds for the training set (default: [3654] for single-threaded computations)
 r_seed_test : [605, 5534, 2910, 7653, 8936, 1925]         # Random seeds for the validation set (default: [605] for single-threaded computations)

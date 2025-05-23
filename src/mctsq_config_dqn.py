@@ -299,7 +299,7 @@ class DQNModel:
 
     def update(self):
         if (len(self.replay_buffer) < self.batch_size) or (len(self.replay_buffer) < self.learning_starts):
-            return
+            return None
 
         # Unpack buffer: states should be tuples (price_state, process_state)
         batch = self.replay_buffer.sample(self.batch_size)
@@ -351,6 +351,8 @@ class DQNModel:
         self.optimizer.step()
 
         self.replay_buffer.update_priorities(indices, td_error.abs().detach().numpy())
+
+        return loss
     
     def save(self, filepath):
         """

@@ -1,9 +1,10 @@
 python_version >= "3.10"
-matplotlib
-gymnasium == 0.28.1
-pandas
-tqdm
-numpy
-rich
-torch
-pyyaml
+matplotlib==3.10.3
+gymnasium==0.28.1
+pandas==2.2.3
+tqdm==4.67.1
+numpy==2.2.6
+rich==14.0.0
+torch==2.7.0
+pyyaml==6.0.2
+tensorboard==2.19.0

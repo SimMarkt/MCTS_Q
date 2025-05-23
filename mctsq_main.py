@@ -15,7 +15,7 @@ import torch as th
 from gymnasium.envs.registration import registry, register
 
 # Libraries with utility functions and classes
-from src.mctsq_utils import load_data, initial_print, config_print, Preprocessing, Postprocessing, create_envs
+from src.mctsq_utils import load_data, initial_print, config_print, Preprocessing, create_envs, plot_results
 from src.mctsq_config_env import EnvConfiguration
 from src.mctsq_config_train import TrainConfiguration
 from src.mctsq_config_mcts import MCTSQConfiguration, MCTS_Q
@@ -100,28 +100,33 @@ def main():
 
     # -------------------------------------------Initialize MCTS_Q------------------------------------------------
     print("Initialize MCTS_Q agent...")
-    model = MCTS_Q(env_train, seed=TrainConfig.seed_train, config=MCTSQConfig, tb_log=TrainConfig.tb_path + str_id)
+    if TrainConfig.model_conf != "test_model":
+        model = MCTS_Q(env_train, seed=TrainConfig.seed_train, config=MCTSQConfig, tb_log=TrainConfig.tb_path + str_id)
+        if TrainConfig.model_conf == "load_model" or TrainConfig.model_conf == "save_load_model":
+            model.load(TrainConfig.log_path + str_id)       # Load pretrained model parameters
 
-    # -------------------------------------------Training of MCTS_Q-----------------------------------------------
-    print("Training of MCTS_Q... >>>", str_id, "<<< \n")
-    model.learn(total_timesteps=TrainConfig.train_steps, callback=callback_val)
 
-    print("...finished training!\n")
+        # -------------------------------------------Training of MCTS_Q-------------------------------------------
+        print("Training of MCTS_Q... >>>", str_id, "<<< \n")
+        model.learn(total_timesteps=TrainConfig.train_steps, callback=callback_val)
 
-    # ------------------------------------------------Save model--------------------------------------------------
-    if TrainConfig.model_conf == "save_model":
-        print("Save MCTS_Q agent under ./logs/ ... \n") 
-        model.save(TrainConfig.log_path + str_id)
+        print("...finished training!\n")
+
+        # ------------------------------------------------Save model----------------------------------------------
+        if TrainConfig.model_conf == "save_model" or TrainConfig.model_conf == "save_load_model":
+            print("Save MCTS_Q agent under ./logs/ ... \n") 
+            model.save(TrainConfig.log_path + str_id)
     
     # ----------------------------------------------Post-processing-----------------------------------------------
-    print("Postprocessing...")
-    model_test = MCTS_Q(env_test_post, seed=TrainConfig.seed_train, config=MCTSQConfig, tb_log=TrainConfig.tb_path + str_id)
-    model_test.load(TrainConfig.log_path + str_id)                                                      # Load pretrained model parameters
+    if TrainConfig.model_conf != "simple_train":
+        print("Postprocessing...")
+        # Initialize MCTS_Q for the test environment and load pretrained model parameters
+        model_test = MCTS_Q(env_test_post, seed=TrainConfig.seed_train, config=MCTSQConfig)
+        model_test.load(TrainConfig.log_path + str_id)
+        stats_dict_test = model_test.test(EnvConfig, Preprocess.eps_sim_steps_test)
 
-    model_test.test(EnvConfig, Preprocess.eps_sim_steps_test)
-    PostProcess = Postprocessing(str_id, EnvConfig, TrainConfig, env_test_post, Preprocess, model_test)
-    PostProcess.test_performance()
-    PostProcess.plot_results()
+        # Plot and save results
+        plot_results(EnvConfig=EnvConfig, stats_dict_test=stats_dict_test, str_id=str_id)
 
 if __name__ == '__main__':
     main()

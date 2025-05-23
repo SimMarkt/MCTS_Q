@@ -222,14 +222,14 @@ class MCTS_Q:
 
                     for _ in tqdm(range(callback.env.eps_sim_steps), desc='   >>Validation:'):
                         action_call = self.predict(callback.env)
-                        _, reward_call, terminated_call, _, _ = callback.env.step(action_call)
-                        cum_reward_call += reward_call
+                        _, _, terminated_call, _, info = callback.env.step(action_call)
+
                         if terminated_call:
                             break
 
                     # callback.stats['steps'].append(self.step)
                     # callback.stats['cum_rew'].append(cum_reward_call)
-                    print(f"   >>Cumulative Reward {cum_reward_call}")
+                    print(f"   >>Cumulative Reward {info['cum_reward']}")
 
                     if self.writer is not None:
                         self.writer.add_scalar("Validation/CumulativeReward", cum_reward_call, global_step=self.step)
@@ -400,7 +400,7 @@ class MCTS_Q:
         stats = np.zeros((eps_sim_steps_test, len(EnvConfig.stats_names)))    
         stats_dict_test={}
 
-        for i in tqdm(range(eps_sim_steps_test), desc='---Apply MCTS_Q on the test environment:'):
+        for i in tqdm(range(eps_sim_steps_test), desc='---Apply MCTS_Q in the test environment:'):
             
             # Perform step based on MCTS with DQN values
             action = self.predict(self.env)
@@ -426,9 +426,12 @@ class MCTS_Q:
                         else:
                             stats[i, j] = info[val]
                     j += 1
+
             
         for m in range(len(EnvConfig.stats_names)):
             stats_dict_test[EnvConfig.stats_names[m]] = stats[:(eps_sim_steps_test), m]
+
+        print(f"   >>Cumulative Reward {info['cum_reward']}")
         
         return stats_dict_test
 

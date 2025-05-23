@@ -462,107 +462,47 @@ def create_envs(env_id, env_kwargs_data, TrainConfig):
 
     return env_train, callback_val, env_test_post
        
-class Postprocessing():
-    """A class for post-processing"""
+def plot_results(EnvConfig, stats_dict_test, str_id):
+    """Generates a multi-subplot plot displaying time-series data and methanation operations based on the agent's actions"""
+    print("---Plot and save RL performance on the test set under ./plots/ ...\n") 
 
-    def __init__(self, str_id, EnvConfig, TrainConfig, env_test_post, Preprocess, model):
-        """
-            Initializes variables
-            :param str_id: Unique identifier for the current training run.
-            :param AgentConfig: Configuration settings for the agent (class object).
-            :param EnvConfig: Configuration settings for the environment (class object).
-            :param TrainConfig: Configuration settings for training (class object).
-            :param env_test_post: Test environment instance used for post-processing.
-            :param Preprocess: Instance of the Preprocessing class.
-        """
-        self.EnvConfig = EnvConfig
-        self.TrainConfig = TrainConfig
-        self.eps_sim_steps_test = Preprocess.eps_sim_steps_test
-        self.env_test_post = env_test_post
-        self.stats_dict_test = {}
-        self.str_id = str_id
-        self.model = model
+    stats_dict = stats_dict_test
+    time_sim = stats_dict['steps_stats'] * EnvConfig.sim_step
+    time_sim *= 1 / 3600 / 24   # Converts the simulation time into days
+    time_sim = time_sim[:-6]    # ptg_gym_env.py curtails an episode by 6 time steps to ensure a data overhead
+    meth_state = stats_dict['Meth_State_stats'][:-6]+1
 
-    def test_performance(self):
-        """
-            Test MCTS_Q on the test environment
-        """
-        stats = np.zeros((self.eps_sim_steps_test, len(self.EnvConfig.stats_names)))
+    fig, axs = plt.subplots(3, 1, figsize=(10, 6), sharex=True, sharey=False)
+    axs[0].plot(time_sim, stats_dict['el_price_stats'][:-6], label='El.')
+    axs[0].plot(time_sim, stats_dict['gas_price_stats'][:-6], 'g', label='(S)NG')
+    axs[0].set_ylabel('El. & (S)NG prices\n [ct/kWh]')
+    axs[0].legend(loc="upper left", fontsize='small')
+    axs0_1 = axs[0].twinx()
+    axs0_1.plot(time_sim, stats_dict['eua_price_stats'][:-6], 'k', label='EUA')
+    axs0_1.set_ylabel('EUA prices [€/t$_{CO2}$]')
+    axs0_1.legend(loc="upper right", fontsize='small')
 
-        _, _ = self.env_test_post.reset()
-        timesteps = self.eps_sim_steps_test#  - 6
+    axs[1].plot(time_sim, meth_state, 'b', label='state')
+    axs[1].set_yticks([1,2,3,4,5])
+    axs[1].set_yticklabels(['Standby', 'Cooldown/Off', 'Startup', 'Partial Load', 'Full Load'])
+    axs[1].set_ylabel(' ')
+    axs[1].legend(loc="upper left", fontsize='small')
+    axs[1].grid(axis='y', linestyle='dashed')
+    axs1_1 = axs[1].twinx()
+    axs1_1.plot(time_sim, stats_dict['Meth_CH4_flow_stats'][:-6]*1000, 'yellowgreen', label='CH$_4$')
+    axs1_1.set_ylabel('CH$_4$ flow rate\n [mmol/s]')
+    axs1_1.legend(loc="upper right", fontsize='small')  
+    
+    axs[2].plot(time_sim, stats_dict['Meth_reward_stats'][:-6]/100, 'g', label='Reward')
+    axs[2].set_ylabel('Reward [€]')
+    axs[2].set_xlabel('Time [d]')
+    axs[2].legend(loc="upper left", fontsize='small')
+    axs2_1 = axs[2].twinx()
+    axs2_1.plot(time_sim, stats_dict['Meth_cum_reward_stats'][:-6]/100, 'k', label='Cum. Reward')
+    axs2_1.set_ylabel('Cumulative \n reward [€]')
+    axs2_1.legend(loc="upper right", fontsize='small')
 
-        for i in tqdm(range(timesteps), desc='---Apply MCTS_Q on the test environment:'):
-            action, _ = self.model.predict(self.env_test_post)
-            _, _, terminated, _, info = self.env_test_post.step(action)
+    fig.suptitle(f"{str_id} \n Rew: {np.round(stats_dict['Meth_cum_reward_stats'][-7]/100, 0)} €", fontsize=9)
+    plt.savefig(f'plots/{str_id}_plot.png')
 
-            # Store data in stats
-            if not terminated:
-                j = 0
-                for val in info[0]:
-                    if j < 24:
-                        if val == 'Meth_Action':
-                            if info[0][val] == 'standby':
-                                stats[i, j] = 0
-                            elif info[0][val] == 'cooldown':
-                                stats[i, j] = 1
-                            elif info[0][val] == 'startup':
-                                stats[i, j] = 2
-                            elif info[0][val] == 'partial_load':
-                                stats[i, j] = 3
-                            else:
-                                stats[i, j] = 4
-                        else:
-                            stats[i, j] = info[0][val]
-                    j += 1
-        
-        
-        for m in range(len(self.EnvConfig.stats_names)):
-            self.stats_dict_test[self.EnvConfig.stats_names[m]] = stats[:(timesteps), m]
-
-        return None
-
-    def plot_results(self):
-        """Generates a multi-subplot plot displaying time-series data and methanation operations based on the agent's actions"""
-        print("---Plot and save RL performance on the test set under ./plots/ ...\n") 
-
-        stats_dict = self.stats_dict_test
-        time_sim = stats_dict['steps_stats'] * self.EnvConfig.sim_step
-        time_sim *= 1 / 3600 / 24   # Converts the simulation time into days
-        time_sim = time_sim[:-6]    # ptg_gym_env.py curtails an episode by 6 time steps to ensure a data overhead
-        meth_state = stats_dict['Meth_State_stats'][:-6]+1
-
-        fig, axs = plt.subplots(3, 1, figsize=(10, 6), sharex=True, sharey=False)
-        axs[0].plot(time_sim, stats_dict['el_price_stats'][:-6], label='El.')
-        axs[0].plot(time_sim, stats_dict['gas_price_stats'][:-6], 'g', label='(S)NG')
-        axs[0].set_ylabel('El. & (S)NG prices\n [ct/kWh]')
-        axs[0].legend(loc="upper left", fontsize='small')
-        axs0_1 = axs[0].twinx()
-        axs0_1.plot(time_sim, stats_dict['eua_price_stats'][:-6], 'k', label='EUA')
-        axs0_1.set_ylabel('EUA prices [€/t$_{CO2}$]')
-        axs0_1.legend(loc="upper right", fontsize='small')
-
-        axs[1].plot(time_sim, meth_state, 'b', label='state')
-        axs[1].set_yticks([1,2,3,4,5])
-        axs[1].set_yticklabels(['Standby', 'Cooldown/Off', 'Startup', 'Partial Load', 'Full Load'])
-        axs[1].set_ylabel(' ')
-        axs[1].legend(loc="upper left", fontsize='small')
-        axs[1].grid(axis='y', linestyle='dashed')
-        axs1_1 = axs[1].twinx()
-        axs1_1.plot(time_sim, stats_dict['Meth_CH4_flow_stats'][:-6]*1000, 'yellowgreen', label='CH$_4$')
-        axs1_1.set_ylabel('CH$_4$ flow rate\n [mmol/s]')
-        axs1_1.legend(loc="upper right", fontsize='small')  
-        
-        axs[2].plot(time_sim, stats_dict['Meth_reward_stats'][:-6]/100, 'g', label='Reward')
-        axs[2].set_ylabel('Reward [€]')
-        axs[2].set_xlabel('Time [d]')
-        axs[2].legend(loc="upper left", fontsize='small')
-        axs2_1 = axs[2].twinx()
-        axs2_1.plot(time_sim, stats_dict['Meth_cum_reward_stats'][:-6]/100, 'k', label='Cum. Reward')
-        axs2_1.set_ylabel('Cumulative \n reward [€]')
-        axs2_1.legend(loc="upper right", fontsize='small')
-
-        fig.suptitle(f"{self.str_id} \n Rew: {np.round(stats_dict['Meth_cum_reward_stats'][-7]/100, 0)} €", fontsize=9)
-        plt.savefig(f'plots/{self.str_id}_plot.png')
-
-        plt.close()
+    plt.close()

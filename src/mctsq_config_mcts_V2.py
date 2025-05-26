@@ -550,7 +550,8 @@ class MCTS_Q:
             action = self.predict(state_c_test)
             _, _, terminated, _, info = self.env.step([action, state_c_test])
             state_c_test = info['state_c']  # Update the state for the next step
-
+            print(info["step"], info["el_price_act"])
+            
             if terminated:
                 break
             else:

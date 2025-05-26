@@ -203,7 +203,9 @@ class MCTS_Q:
         :param callback: Callback function for evaluation
         """
 
-        state, _, state_c_learn = self.env.reset()  
+        state, info = self.env.reset()  
+
+        state_c_learn = info['state_c']
 
         self.callback = callback    
 
@@ -223,7 +225,8 @@ class MCTS_Q:
             # Perform step based on MCTS with DQN values
             action = self.predict(state_c_learn)
             start_step = time.time()
-            next_state, reward, terminated, _, _, state_c_learn = self.env.step(action, state_c_learn)
+            next_state, reward, terminated, _, info = self.env.step([action, state_c_learn])
+            state_c_learn = info['state_c']  # Update the state for the next step
             step_duration = time.time() - start_step
             self.time_step += step_duration
 
@@ -236,7 +239,8 @@ class MCTS_Q:
 
             state = next_state
             if terminated:
-                state, _, state_c_learn = self.env.reset()
+                state, info = self.env.reset()
+                state_c_learn = info['state_c']  # Reset the state for the next episode
 
             # # Evaluate the policy (in parallel, non-blocking)
             # if callback is not None:
@@ -268,12 +272,14 @@ class MCTS_Q:
                 if self.step % self.callback.val_steps == 0 and self.step != 0:
                     self.callback_run = True
 
-                    _, _, state_c_call = self.callback.env.reset()
+                    _, info = self.callback.env.reset()
+                    state_c_call = info['state_c']  # Reset the state for the next episode
                     cum_reward_call = 0 
 
                     for _ in tqdm(range(self.callback.env.eps_sim_steps), desc='   >>Validation:'):
                         action_call = self.predict(state_c_call)
-                        _, _, terminated_call, _, info, state_c_call = self.callback.env.step(action_call, state_c_call)
+                        _, _, terminated_call, _, info = self.callback.env.step([action_call, state_c_call])
+                        state_c_call = info['state_c']  # Update the state for the next step
 
                         if terminated_call:
                             break
@@ -447,8 +453,9 @@ class MCTS_Q:
         # deepcopy_duration = time.time() - start_deepcopy
         # self.time_deepcopy += deepcopy_duration
         start_step = time.time()
-        if self.callback_run: _, _, terminated, truncated, _, state_c = self.callback.env.step(action, state_c)
-        else: _, _, terminated, truncated, _, state_c = self.env.step(action, state_c)
+        if self.callback_run: _, _, terminated, truncated, info = self.callback.env.step([action, state_c])
+        else: _, _, terminated, truncated, info = self.env.step([action, state_c])
+        state_c = info['state_c']  # Update the state for the next step
         step_duration = time.time() - start_step
         self.time_step += step_duration
         done = terminated or truncated
@@ -531,7 +538,8 @@ class MCTS_Q:
         """
             Test MCTS_Q on the test environment
         """
-        _, _, state_c_test = self.env.reset()  
+        _, info = self.env.reset()  
+        state_c_test = info['state_c']  # Reset the state for the next episode
 
         stats = np.zeros((eps_sim_steps_test, len(EnvConfig.stats_names)))    
         stats_dict_test={}
@@ -540,7 +548,8 @@ class MCTS_Q:
             
             # Perform step based on MCTS with DQN values
             action = self.predict(state_c_test)
-            _, _, terminated, _, info, state_c_test = self.env.step(action, state_c_test)
+            _, _, terminated, _, info = self.env.step([action, state_c_test])
+            state_c_test = info['state_c']  # Update the state for the next step
 
             if terminated:
                 break

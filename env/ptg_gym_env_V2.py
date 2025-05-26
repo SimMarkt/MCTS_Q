@@ -236,7 +236,7 @@ class PTGEnv(gym.Env):
             "Elec_Heating": np.array(self.Meth_el_heating_n, dtype=np.float64),
         }
     
-    def _get_info(self):
+    def _get_info(self, state_c):
         """Retrieve additional details or metadata about the environment"""
         return {
             "step": self.k,
@@ -263,6 +263,7 @@ class PTGEnv(gym.Env):
             "cum_reward": self.cum_rew,
             "Pot_Reward": self.e_r_b_act[1, 12],
             "Part_Full": self.e_r_b_act[2, 12],
+            "state_c": state_c,
         }
 
     def _get_reward(self):
@@ -323,7 +324,9 @@ class PTGEnv(gym.Env):
 
         return rew_norm
 
-    def step(self, action, state_c):
+    def step(self, act_state_c):
+        action = act_state_c[0]  # Action is passed as a parameter to avoid deepcopy of the environment in MCTS
+        state_c = act_state_c[1]  # State is passed as a parameter to avoid deepcopy of the environment in MCTS
         # Unpacking from state_c dict
         for key in ['i', 'j', 'k', 'Meth_State', 'Meth_T_cat', 'standby_op', 'startup_op', 'part_op', 'full_op']:
             setattr(self, key, state_c[key])
@@ -494,15 +497,6 @@ class PTGEnv(gym.Env):
         reward = self._get_reward()
         observation = self.get_obs()
         terminated = self._is_terminated()
-        if self.train_or_eval == "train":
-            info = {}
-        else:
-            info = self._get_info()
-
-        self.k += 1
-
-        # PtGEnv uses only "terminated" because preliminary studies showed no performance difference 
-        # between using "terminated" and "truncated" episodes.
 
         state_c = {
             'i': self.i,
@@ -517,7 +511,17 @@ class PTGEnv(gym.Env):
             'obs_norm': observation,
         }
 
-        return observation, reward, terminated, False, info, state_c
+        if self.train_or_eval == "train":
+            info = self._get_info(state_c)
+        else:
+            info = self._get_info(state_c)
+
+        self.k += 1
+
+        # PtGEnv uses only "terminated" because preliminary studies showed no performance difference 
+        # between using "terminated" and "truncated" episodes.
+
+        return observation, reward, terminated, False, info
 
     def reset(self, seed=None, options=None):
         """Reset the environment"""
@@ -540,7 +544,6 @@ class PTGEnv(gym.Env):
         self._normalize_observations()
 
         observation = self.get_obs()
-        info = self._get_info()
 
         state_c = {
             'i': self.i,
@@ -555,7 +558,9 @@ class PTGEnv(gym.Env):
             'obs_norm': observation,
         }
 
-        return observation, info, state_c
+        info = self._get_info(state_c)
+
+        return observation, info
 
     def _is_terminated(self):
         """Returns whether the episode terminates"""

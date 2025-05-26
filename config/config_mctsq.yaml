@@ -8,10 +8,11 @@
 # ----------------------------------------------------------------------------------------------------------------
 
 # MCTS hyperparameters
-iterations : 50           # No. of iterations for MCTS
+iterations : 50             # No. of iterations for MCTS
 c_init : 1.0                # Initial exploration parameter for PUCT
-c_base : 10                # Parameter for exploration increase in PUCT
+c_base : 10                 # Parameter for exploration increase in PUCT
 maximum_depth : 72          # Maximum depth of the tree
+tree_remain_interval : 12   # Interval for storing the tree structure in the MCTS_Q environment (in steps)
 
 # Q-Learning hyperparameters
 learning_rate : 0.001       # Learning rate

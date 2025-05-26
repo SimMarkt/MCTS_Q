@@ -184,6 +184,11 @@ class MCTS_Q:
 
         self.callback_run = False
 
+        self.root_node = None
+        self.tree_remain = False
+
+        self.train_eval = "train"  # Default mode for training
+
         self.time_deepcopy = 0
         self.time_step = 0
         self.time_mcts_core = 0
@@ -223,7 +228,7 @@ class MCTS_Q:
             self.time_inf = 0
 
             # Perform step based on MCTS with DQN values
-            action = self.predict(state_c_learn)
+            action = self.predict(state_c_learn, train_eval="train")
             start_step = time.time()
             next_state, reward, terminated, _, info = self.env.step([action, state_c_learn])
             state_c_learn = info['state_c']  # Update the state for the next step
@@ -238,9 +243,26 @@ class MCTS_Q:
                 self.writer.add_scalar("Training/Loss", loss, global_step=self.step)
 
             state = next_state
+
+            # --- Keep subtree for next step ---
+            if self.root_node is not None:
+                # Find the child corresponding to the action taken
+                matching_children = [child for child in self.root_node.children if child.action == action]
+                if matching_children:
+                    new_root = matching_children[0]
+                    new_root.parent = None  # Detach from previous root
+                    self.root_node = new_root
+                else:
+                    self.root_node = None  # No matching child, start fresh
+            else:
+                self.root_node = None  # No previous tree
+
             if terminated:
                 state, info = self.env.reset()
                 state_c_learn = info['state_c']  # Reset the state for the next episode
+
+            if self.step % self.tree_remain_interval == 0 and self.step != 0:
+                self.tree_remain = False
 
             # # Evaluate the policy (in parallel, non-blocking)
             # if callback is not None:
@@ -277,7 +299,7 @@ class MCTS_Q:
                     cum_reward_call = 0 
 
                     for _ in tqdm(range(self.callback.env.eps_sim_steps), desc='   >>Validation:'):
-                        action_call = self.predict(state_c_call)
+                        action_call = self.predict(state_c_call, train_eval="eval")
                         _, _, terminated_call, _, info = self.callback.env.step([action_call, state_c_call])
                         state_c_call = info['state_c']  # Update the state for the next step
 
@@ -309,23 +331,46 @@ class MCTS_Q:
             self.time_average_copy.append(self.time_deepcopy)
             print(f"     average deepcopy time: {np.mean(self.time_average_copy)} seconds")
 
+            print(f"     Replay buffer size: {len(self.dqn.replay_buffer)} samples")
+
+            # if self.root_node is not None:
+            #     # Compute the maximum depth of the current tree
+            #     def get_max_depth(node):
+            #         if not node.children:
+            #             return node.depth
+            #         return max(get_max_depth(child) for child in node.children)
+            #     max_depth = get_max_depth(self.root_node)
+            #     print(f"     Current MCTS tree depth: {max_depth}")
+            # else:
+            #     print(f"     Current MCTS tree depth: 0")
+
 
         if self.writer is not None:
             self.writer.close()
 
-    def predict(self, state_c, deterministic=False):
+    def predict(self, state_c, train_eval="train", deterministic=False):
         """
         Perform MCTS search to find the best action
         :param env: The environment to search in
         """
         self.deterministic = deterministic
+        self.train_eval = train_eval
         # start_deepcopy = time.time()
         # root_env_copy = copy.deepcopy(env)
         # deepcopy_duration = time.time() - start_deepcopy
         # self.time_deepcopy += deepcopy_duration
 
+        # --- Use existing subtree if available ---
+        # if self.root_node is not None and self.root_node.state_c == state_c:
+        if self.root_node is not None and self.tree_remain and train_eval == "train":
+            root_node = self.root_node
+        else:
+            root_node = MCTSNode(state_c, maximum_depth=self.maximum_depth)
+            self.root_node = root_node
+            self.tree_remain = True
 
-        root_node = MCTSNode(state_c, maximum_depth=self.maximum_depth)
+
+        # root_node = MCTSNode(state_c, maximum_depth=self.maximum_depth)
 
         start_mcts_core = time.time()
         for _ in range(self.iterations):
@@ -355,9 +400,9 @@ class MCTS_Q:
 
         best_action = root_node.most_visited_child().action
 
-        # Explicitly delete the tree to break reference cycles and clear memory
-        del root_node
-        gc.collect()
+        # # Explicitly delete the tree to break reference cycles and clear memory
+        # del root_node
+        # gc.collect()
 
         return best_action
     
@@ -453,9 +498,18 @@ class MCTS_Q:
         # deepcopy_duration = time.time() - start_deepcopy
         # self.time_deepcopy += deepcopy_duration
         start_step = time.time()
-        if self.callback_run: _, _, terminated, truncated, info = self.callback.env.step([action, state_c])
-        else: _, _, terminated, truncated, info = self.env.step([action, state_c])
-        state_c = info['state_c']  # Update the state for the next step
+        if self.callback_run: 
+            _, _, terminated, truncated, info = self.callback.env.step([action, state_c])
+            state_c = info['state_c']  # Update the state for the next step
+        else: 
+            next_state, reward, terminated, truncated, info = self.env.step([action, state_c])
+            state_c = info['state_c']  # Update the state for the next step
+            if self.train_eval=="train":
+                state = state_c['obs_norm']  # Update the state for the next step
+
+                # Train DQN parameter
+                self.dqn.replay_buffer.push(state, action, reward, next_state, terminated)
+
         step_duration = time.time() - start_step
         self.time_step += step_duration
         done = terminated or truncated
@@ -547,10 +601,9 @@ class MCTS_Q:
         for i in tqdm(range(eps_sim_steps_test), desc='---Apply MCTS_Q in the test environment:'):
             
             # Perform step based on MCTS with DQN values
-            action = self.predict(state_c_test)
+            action = self.predict(state_c_test, train_eval="eval")
             _, _, terminated, _, info = self.env.step([action, state_c_test])
             state_c_test = info['state_c']  # Update the state for the next step
-            print(info["step"], info["el_price_act"])
             
             if terminated:
                 break

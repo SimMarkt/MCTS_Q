@@ -21,7 +21,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 import time
 
-from src.mctsq_config_dqn import DQNModel
+from src.mctsq_config_dqn_V2 import DQNModel
 
 #TODO: Include random seeds
 #TODO: Include deterministic=True für validation and testing??
@@ -35,8 +35,8 @@ class MCTSQConfiguration():
 
     def __init__(self):
         # Load the algorithm configuration from the YAML file
-        with open("config/config_mctsq.yaml", "r") as env_file:
-            mctsq_config = yaml.safe_load(env_file)
+        with open("config/config_mctsq.yaml", "r") as mctsq_file:
+            mctsq_config = yaml.safe_load(mctsq_file)
 
         # Unpack data from dictionary
         self.__dict__.update(mctsq_config)
@@ -119,8 +119,8 @@ class MCTS_Q:
             self.__dict__.update(config.__dict__)
         else:
             # Fallback: load from YAML if config not provided
-            with open("config/config_mctsq.yaml", "r") as env_file:
-                mctsq_config = yaml.safe_load(env_file)
+            with open("config/config_mctsq.yaml", "r") as mctsq_file:
+                mctsq_config = yaml.safe_load(mctsq_file)
             self.__dict__.update(mctsq_config)
 
         self.env = env
@@ -137,7 +137,13 @@ class MCTS_Q:
         el_input_dim = 1                        # "Elec_Price" in ptg_gym_env observation space
         process_input_dim = 6                   # "T_CAT", "H2_in_MolarFlow", "CH4_syn_MolarFlow", "H2_res_MolarFlow", "H2O_DE_MassFlow", "Elec_Heating"
         gas_eua_input_dim = 2                   # "Gas_Price", "EUA_Price"
-        temporal_encodings = 2                  # Temporal encoding with two additional features (sin/cos)
+        temporal_encodings = 0                  # (Optional) Temporal encoding with two additional features (sin/cos)
+
+        seq_len_price = env_config['price_ahead'] + env_config['price_past']
+        seq_len_gas_eua = 3
+        price_step_minutes = 60
+        process_step_minutes = self.seq_step * env_config['time_step_op'] / 60
+        gas_eua_step_minutes = 60 * 12
 
         # Initialize the DQN model
         action_dim = env.action_space.n
@@ -159,12 +165,24 @@ class MCTS_Q:
             gas_eua_encoder_type=self.gas_eua_encoder_type,
             activation=self.activation,
             learning_starts=self.learning_starts,
+            seq_len_price=seq_len_price,
+            seq_len_process=self.seq_length,
+            seq_len_gas_eua=seq_len_gas_eua,
+            price_step_minutes=price_step_minutes,
+            process_step_minutes=process_step_minutes,
+            gas_eua_step_minutes=gas_eua_step_minutes,
             seed=seed
         )
+
+        # TorchScript: Script the policy network for faster inference
+        self.dqn.policy_net.eval()
+        self.dqn.policy_net = torch.jit.script(self.dqn.policy_net)
 
         self.action_type = "discrete"
 
         self.deterministic = False
+
+        self.callback_run = False
 
         self.time_deepcopy = 0
         self.time_step = 0
@@ -174,6 +192,8 @@ class MCTS_Q:
         self.time_eva = 0
         self.time_back = 0
         self.time_inf = 0
+        self.time_average = []
+        self.time_average_copy = []
          
 
     def learn(self, total_timesteps, callback):
@@ -183,9 +203,13 @@ class MCTS_Q:
         :param callback: Callback function for evaluation
         """
 
-        state, _ = self.env.reset()      
+        state, info = self.env.reset()  
 
-        self.eval_processes = []
+        state_c_learn = info['state_c']
+
+        self.callback = callback    
+
+        # self.eval_processes = []
 
         for self.step in tqdm(range(total_timesteps), desc='---Training MCTS_Q:'):
             start_total = time.time()
@@ -199,9 +223,10 @@ class MCTS_Q:
             self.time_inf = 0
 
             # Perform step based on MCTS with DQN values
-            action = self.predict(self.env)
+            action = self.predict(state_c_learn)
             start_step = time.time()
-            next_state, reward, terminated, _, _ = self.env.step(action)
+            next_state, reward, terminated, _, info = self.env.step([action, state_c_learn])
+            state_c_learn = info['state_c']  # Update the state for the next step
             step_duration = time.time() - start_step
             self.time_step += step_duration
 
@@ -214,7 +239,8 @@ class MCTS_Q:
 
             state = next_state
             if terminated:
-                break
+                state, info = self.env.reset()
+                state_c_learn = info['state_c']  # Reset the state for the next episode
 
             # # Evaluate the policy (in parallel, non-blocking)
             # if callback is not None:
@@ -242,14 +268,18 @@ class MCTS_Q:
                 self.dqn.update_target_network()
             
             # Evaluate the policy (In Serial processing)
-            if callback is not None:
-                if self.step % callback.val_steps == 0 and self.step != 0:
-                    state_call, _ = callback.env.reset()
+            if self.callback is not None:
+                if self.step % self.callback.val_steps == 0 and self.step != 0:
+                    self.callback_run = True
+
+                    _, info = self.callback.env.reset()
+                    state_c_call = info['state_c']  # Reset the state for the next episode
                     cum_reward_call = 0 
 
-                    for _ in tqdm(range(callback.env.eps_sim_steps), desc='   >>Validation:'):
-                        action_call = self.predict(callback.env)
-                        _, _, terminated_call, _, info = callback.env.step(action_call)
+                    for _ in tqdm(range(self.callback.env.eps_sim_steps), desc='   >>Validation:'):
+                        action_call = self.predict(state_c_call)
+                        _, _, terminated_call, _, info = self.callback.env.step([action_call, state_c_call])
+                        state_c_call = info['state_c']  # Update the state for the next step
 
                         if terminated_call:
                             break
@@ -260,7 +290,9 @@ class MCTS_Q:
 
                     if self.writer is not None:
                         self.writer.add_scalar("Validation/CumulativeReward", cum_reward_call, global_step=self.step)
-
+                    
+                    self.callback_run = False
+        
             total_duration = time.time() - start_total
             print("[DEBUG] Time Analysis-----------")
             print(f"     mcts core: {self.time_mcts_core/total_duration * 100}%")
@@ -272,23 +304,28 @@ class MCTS_Q:
             print(f"     step: {self.time_step/total_duration * 100}%")
             print(f"     inf: {self.time_inf/total_duration * 100}%")
 
+            self.time_average.append(self.time_inf)
+            print(f"     average inference time: {np.mean(self.time_average)} seconds")
+            self.time_average_copy.append(self.time_deepcopy)
+            print(f"     average deepcopy time: {np.mean(self.time_average_copy)} seconds")
+
 
         if self.writer is not None:
             self.writer.close()
 
-    def predict(self, env, deterministic=False):
+    def predict(self, state_c, deterministic=False):
         """
         Perform MCTS search to find the best action
         :param env: The environment to search in
         """
         self.deterministic = deterministic
         # start_deepcopy = time.time()
-        root_env_copy = copy.deepcopy(env)
+        # root_env_copy = copy.deepcopy(env)
         # deepcopy_duration = time.time() - start_deepcopy
         # self.time_deepcopy += deepcopy_duration
 
 
-        root_node = MCTSNode(root_env_copy, maximum_depth=self.maximum_depth)
+        root_node = MCTSNode(state_c, maximum_depth=self.maximum_depth)
 
         start_mcts_core = time.time()
         for _ in range(self.iterations):
@@ -304,7 +341,7 @@ class MCTS_Q:
                 self.time_expand += expand_duration
 
             start_eva = time.time()
-            value = self._evaluate(node.env)
+            value = self._evaluate(node.state_c)
             eva_duration = time.time() - start_eva
             self.time_eva += eva_duration
 
@@ -339,55 +376,55 @@ class MCTS_Q:
             # Compute exploration adjustment C(s)
             c_puct = math.log((1 + total_visits + c_base) / c_base) + c_init
 
-            # Serial inference
-            for child in node.children:
-                # Use the DQN model's Q-values for the prior policy
-
-                price_state, process_state, gas_eua_state = self._get_state(child.env)  # Get the state representation
-
-                start_inf = time.time()
-                with torch.no_grad():
-                    q_values = self.dqn.policy_net(price_state, process_state, gas_eua_state)
-                prior_prob = F.softmax(q_values, dim=-1)[0, child.action].item()
-                inf_duration = time.time() - start_inf
-                self.time_inf += inf_duration
-
-                # Compute the mean Q-value for the child node
-                mean_q_value = child.total_value / child.visits if child.visits > 0 else 0
-
-                # Compute PUCT score
-                child.puct_score = (
-                    mean_q_value + c_puct * prior_prob * math.sqrt(total_visits) / (1 + child.visits)
-                )
-
-            # # --- Batch inference for all children ---
-            # price_states, process_states, gas_eua_states = [], [], []
-            # actions = []
+            # # Serial inference
             # for child in node.children:
-            #     price_state, process_state, gas_eua_state = self._get_state(node.env)
-            #     price_states.append(price_state)
-            #     process_states.append(process_state)
-            #     gas_eua_states.append(gas_eua_state)
-            #     actions.append(child.action)
+            #     # Use the DQN model's Q-values for the prior policy
 
-            # # Concatenate tensors along batch dimension
-            # price_states = torch.cat(price_states, dim=0)
-            # process_states = torch.cat(process_states, dim=0)
-            # gas_eua_states = torch.cat(gas_eua_states, dim=0)
+            #     price_state, process_state, gas_eua_state = self._get_state(node.env)  # Get the state representation
 
-            # start_inf = time.time()
-            # with torch.no_grad():
-            #     q_values_batch = self.dqn.policy_net(price_states, process_states, gas_eua_states)  # (num_children, num_actions)
-            #     prior_probs = F.softmax(q_values_batch, dim=-1)  # (num_children, num_actions)
-            # inf_duration = time.time() - start_inf
-            # self.time_inf += inf_duration
+            #     start_inf = time.time()
+            #     with torch.no_grad():
+            #         q_values = self.dqn.policy_net(price_state, process_state, gas_eua_state)
+            #     prior_prob = F.softmax(q_values, dim=-1)[0, child.action].item()
+            #     inf_duration = time.time() - start_inf
+            #     self.time_inf += inf_duration
 
-            # for idx, child in enumerate(node.children):
-            #     prior_prob = prior_probs[idx, actions[idx]].item()
+            #     # Compute the mean Q-value for the child node
             #     mean_q_value = child.total_value / child.visits if child.visits > 0 else 0
+
+            #     # Compute PUCT score
             #     child.puct_score = (
             #         mean_q_value + c_puct * prior_prob * math.sqrt(total_visits) / (1 + child.visits)
             #     )
+
+            # --- Batch inference for all children ---
+            price_states, process_states, gas_eua_states = [], [], []
+            actions = []
+            for child in node.children:
+                price_state, process_state, gas_eua_state = self._get_state(child.state_c)  # Get the state representation
+                price_states.append(price_state)
+                process_states.append(process_state)
+                gas_eua_states.append(gas_eua_state)
+                actions.append(child.action)
+
+            # Concatenate tensors along batch dimension
+            price_states = torch.cat(price_states, dim=0)
+            process_states = torch.cat(process_states, dim=0)
+            gas_eua_states = torch.cat(gas_eua_states, dim=0)
+
+            start_inf = time.time()
+            with torch.no_grad():
+                q_values_batch = self.dqn.policy_net(price_states, process_states, gas_eua_states)  # (num_children, num_actions)
+                prior_probs = F.softmax(q_values_batch, dim=-1)  # (num_children, num_actions)
+            inf_duration = time.time() - start_inf
+            self.time_inf += inf_duration
+
+            for idx, child in enumerate(node.children):
+                prior_prob = prior_probs[idx, actions[idx]].item()
+                mean_q_value = child.total_value / child.visits if child.visits > 0 else 0
+                child.puct_score = (
+                    mean_q_value + c_puct * prior_prob * math.sqrt(total_visits) / (1 + child.visits)
+                )
 
             # Select the child with the highest PUCT score
             node = max(node.children, key=lambda child: child.puct_score)
@@ -403,41 +440,45 @@ class MCTS_Q:
         if node.depth >= self.maximum_depth:  # Prevent expansion beyond max depth
             return node
 
+        state_c = node.state_c
+
         legal_actions = node.get_legal_actions()
         tried_actions = [child.action for child in node.children]
         untried_actions = [a for a in legal_actions if a not in tried_actions]
 
         # Select a random untried action
         action = random.choice(untried_actions)
-        start_deepcopy = time.time()
-        new_env = copy.deepcopy(node.env)
-        deepcopy_duration = time.time() - start_deepcopy
-        self.time_deepcopy += deepcopy_duration
+        # start_deepcopy = time.time()
+        # new_env = copy.deepcopy(node.env)
+        # deepcopy_duration = time.time() - start_deepcopy
+        # self.time_deepcopy += deepcopy_duration
         start_step = time.time()
-        _, _, terminated, truncated, _ = new_env.step(action)
+        if self.callback_run: _, _, terminated, truncated, info = self.callback.env.step([action, state_c])
+        else: _, _, terminated, truncated, info = self.env.step([action, state_c])
+        state_c = info['state_c']  # Update the state for the next step
         step_duration = time.time() - start_step
         self.time_step += step_duration
         done = terminated or truncated
         child_node = MCTSNode(
-            new_env, parent=node, action=action, done=done, maximum_depth=self.maximum_depth
+            state_c, parent=node, action=action, done=done, maximum_depth=self.maximum_depth
         )
         node.children.append(child_node)
         return child_node
     
-    def _evaluate(self, node):
+    def _evaluate(self, state_c):
         """
         Use the DQN model's value function to estimate the value of a leaf node.
         :param node: The leaf node to evaluate
         :return: The expected value of Q-values for the node
         """
-        price_state, process_state, gas_eua_state = self._get_state(node.env)  # Get the state representation
+        price_state, process_state, gas_eua_state = self._get_state(state_c)  # Get the state representation
 
         with torch.no_grad():
             q_values = self.dqn.policy_net(price_state, process_state, gas_eua_state)  # Get Q-values from the DQN
-            policy_probs = F.softmax(q_values, dim=-1)  # Compute policy probabilities using softmax
-            expected_value = torch.sum(policy_probs * q_values, dim=-1).item()  # Compute the expected value of Q-values
-        return expected_value
-        #return q_values.max().item()  # Use the maximum Q-value as the value estimate
+            # policy_probs = F.softmax(q_values, dim=-1)  # Compute policy probabilities using softmax
+            # expected_value = torch.sum(policy_probs * q_values, dim=-1).item()  # Compute the expected value of Q-values
+        # return expected_value
+        return q_values.max().item()  # Use the maximum Q-value as the value estimate
         #TODO: Incorporate n-step return for value estimation
 
     def _backpropagate(self, node, value):
@@ -451,14 +492,14 @@ class MCTS_Q:
             node.total_value += value
             node = node.parent
 
-    def _get_state(self, env):
+    def _get_state(self, state_c):
         """
         Get the state representation from the environment.
         :param env: The environment to get the state from
         :return: The state representation for electricity prices, process data, and gas/EUA prices
         """
 
-        state = env.get_obs()
+        state = state_c['obs_norm']
 
         price_state = np.array(state["Elec_Price"])[..., np.newaxis]  # shape: (#el_data, 1)
         process_state = np.stack([
@@ -480,6 +521,7 @@ class MCTS_Q:
 
         return price_state, process_state, gas_eua_state
 
+
     def save(self, filepath):
         """
         Save the DQN model parameters used by MCTS_Q.
@@ -496,7 +538,8 @@ class MCTS_Q:
         """
             Test MCTS_Q on the test environment
         """
-        _, _ = self.env.reset()  
+        _, info = self.env.reset()  
+        state_c_test = info['state_c']  # Reset the state for the next episode
 
         stats = np.zeros((eps_sim_steps_test, len(EnvConfig.stats_names)))    
         stats_dict_test={}
@@ -504,8 +547,9 @@ class MCTS_Q:
         for i in tqdm(range(eps_sim_steps_test), desc='---Apply MCTS_Q in the test environment:'):
             
             # Perform step based on MCTS with DQN values
-            action = self.predict(self.env)
-            _, _, terminated, _, info = self.env.step(action)
+            action = self.predict(state_c_test)
+            _, _, terminated, _, info = self.env.step([action, state_c_test])
+            state_c_test = info['state_c']  # Update the state for the next step
 
             if terminated:
                 break
@@ -538,8 +582,8 @@ class MCTS_Q:
 
 
 class MCTSNode:
-    def __init__(self, env, parent=None, action=None, done=False, remaining_steps=42, total_steps=42, depth=0, maximum_depth=42):
-        self.env = env
+    def __init__(self, state_c, parent=None, action=None, done=False, remaining_steps=42, total_steps=42, depth=0, maximum_depth=42):
+        self.state_c = state_c
         self.parent = parent
         self.action = action
         self.children = []
@@ -574,7 +618,7 @@ class MCTSNode:
         Get the legal actions for the current node based on the environment's action space
         :return: List of legal actions
         """
-        meth_state = self.env.Meth_State  # Access the Meth_State from the environment
+        meth_state = self.state_c['Meth_State']  # Access the Meth_State from the environment
         if meth_state == 0:     # 'standby'
             return [0, 1, 2]    # Allows only standby, cooldown, and startup actions
         elif meth_state == 1:   # 'cooldown'
@@ -586,7 +630,7 @@ class MCTSNode:
         elif meth_state == 4:   # 'full load'
             return [0, 1, 3, 4] # Allows only standby, cooldown, and load level (partial load, full load)
         else:
-            return list(range(self.env.action_space.n))  # Default to all actions
+            return list(range(5))  # Default to all actions
         
     def most_visited_child(self):
         """
@@ -595,15 +639,15 @@ class MCTSNode:
         """
         return max(self.children, key=lambda child: child.visits)
     
-def run_callback_eval(step, callback, result_queue):
-    state_call, _ = callback.env.reset()
-    cum_reward_call = 0
-    for _ in tqdm(range(callback.env.eps_sim_steps), desc='   >>Validation:'): # range(callback.env.eps_sim_steps): 
-        action_call = callback.model.predict(callback.env)
-        _, reward_call, terminated_call, _, _ = callback.env.step(action_call)
-        cum_reward_call += reward_call
-        if terminated_call:
-            break
-    # Send results back to main process
-    result_queue.put((step, cum_reward_call))
+# def run_callback_eval(step, callback, result_queue):
+#     state_call, _, state_c_call = callback.env.reset()
+#     cum_reward_call = 0
+#     for _ in tqdm(range(callback.env.eps_sim_steps), desc='   >>Validation:'): # range(callback.env.eps_sim_steps): 
+#         action_call = callback.model.predict(callback.env)
+#         _, reward_call, terminated_call, _, _, state_c_call = callback.env.step(action_call, state_c_call)
+#         cum_reward_call += reward_call
+#         if terminated_call:
+#             break
+#     # Send results back to main process
+#     result_queue.put((step, cum_reward_call))
      

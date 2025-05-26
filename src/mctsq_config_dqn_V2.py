@@ -13,37 +13,22 @@ import numpy as np
 from collections import deque
 import random
 
-
 #TODO: Perhaps Include loss which minimizes the the difference between the MCTS policy and DQN policy and also the value (However, the DQN policy directly inferes from the value, not a distinct network -> perhaps not necessary)
 
-# Utility functions for temporal encoding
-def add_time_features(data, step_minutes, start_minute=0):
-    """
-    Adds sin/cos time-of-hour encoding to each time step.
-    data: (batch, seq_len, features)
-    Returns: (batch, seq_len, features+2)
-    """
-    batch, seq_len, _ = data.shape
-    minutes = (np.arange(seq_len) * step_minutes + start_minute) % 60
-    radians = 2 * np.pi * minutes / 60
-    sin_time = np.sin(radians)
-    cos_time = np.cos(radians)
-    time_features = np.stack([sin_time, cos_time], axis=-1)  # (seq_len, 2)
-    time_features = np.broadcast_to(time_features, (batch, seq_len, 2))
-    return np.concatenate([data, time_features], axis=-1)
-
-def add_time_features_to_gas_eua(data, hours_offsets=[-12, 0, 12]):
-    """
-    Adds sin/cos time-of-day encoding to each of the 3 gas/EUA price points.
-    data: (batch, 3, features)
-    """
-    batch = data.shape[0]
-    radians = 2 * np.pi * (np.array(hours_offsets) % 24) / 24
-    sin_time = np.sin(radians)
-    cos_time = np.cos(radians)
-    time_features = np.stack([sin_time, cos_time], axis=-1)  # (3, 2)
-    time_features = np.broadcast_to(time_features, (batch, 3, 2))
-    return np.concatenate([data, time_features], axis=-1)
+# # Utility functions for temporal encoding
+# def add_time_features(batch=64, seq_len=25, step_minutes=60):
+#     """
+#     Adds sin/cos time-of-hour encoding to each time step.
+#     Returns: time_features
+#     """
+#     #TODO: Adjust range (/60) dependent on the time resolution of the data?
+#     minutes = (np.arange(seq_len) * step_minutes) % 60
+#     radians = 2 * np.pi * minutes / 60
+#     sin_time = np.sin(radians)
+#     cos_time = np.cos(radians)
+#     time_features = np.stack([sin_time, cos_time], axis=-1)  # (seq_len, 2)
+#     time_features = np.broadcast_to(time_features, (batch, seq_len, 2))
+#     return time_features
 
 # --- ConvAttentionEnc ---
 class ConvAttentionEnc(nn.Module):
@@ -184,44 +169,14 @@ class TripleEncoderDQN(nn.Module):
         fc_layers.append(nn.Linear(int(hidden_units), int(action_dim)))
         self.fc_layers = nn.Sequential(*fc_layers)
 
-    def forward(self, price_data, process_data, gas_eua_data, 
-                price_step_minutes=15, process_step_minutes=15, 
-                price_start_minute=0, process_start_minute=0, 
-                gas_eua_hours_offsets=[-12, 0, 12]):
+    def forward(self, price_data, process_data, gas_eua_data):
         # price_data: (batch, seq_len, el_input_dim)
         # process_data: (batch, seq_len, process_input_dim)
         # gas_eua_data: (batch, seq_len, gas_eua_input_dim)
 
-        # Add temporal features (convert to numpy if needed)
-        if isinstance(price_data, torch.Tensor):
-            print("Numpy1")
-            price_data_np = price_data.detach().cpu().numpy()
-        else:
-            price_data_np = price_data
-
-        price_data_np = add_time_features(price_data_np, price_step_minutes, price_start_minute)
-        price_data = torch.FloatTensor(price_data_np).to(price_data.device if isinstance(price_data, torch.Tensor) else 'cpu')
-
-        if isinstance(process_data, torch.Tensor):
-            print("Numpy2")
-            process_data_np = process_data.detach().cpu().numpy()
-        else:
-            process_data_np = process_data
-        process_data_np = add_time_features(process_data_np, process_step_minutes, process_start_minute)
-        process_data = torch.FloatTensor(process_data_np).to(process_data.device if isinstance(process_data, torch.Tensor) else 'cpu')
-
-        if isinstance(gas_eua_data, torch.Tensor):
-            print("Numpy3")
-            gas_eua_data_np = gas_eua_data.detach().cpu().numpy()
-        else:
-            gas_eua_data_np = gas_eua_data
-        gas_eua_data_np = add_time_features_to_gas_eua(gas_eua_data_np, gas_eua_hours_offsets)
-        gas_eua_data = torch.FloatTensor(gas_eua_data_np).to(gas_eua_data.device if isinstance(gas_eua_data, torch.Tensor) else 'cpu')
-
         price_feat = self.price_encoder(price_data)
         process_feat = self.process_encoder(process_data)
         gas_eua_feat = self.gas_eua_encoder(gas_eua_data)
-
         combined = torch.cat([price_feat, process_feat, gas_eua_feat], dim=-1)
         return self.fc_layers(combined)
     
@@ -263,8 +218,8 @@ class DQNModel:
         el_input_dim, process_input_dim, gas_eua_input_dim, 
         action_dim, embed_dim, hidden_layers, hidden_units, buffer_capacity, batch_size, gamma, lr,
         price_encoder_type="conv", process_encoder_type="gru", gas_eua_encoder_type="mlp",
-        activation="relu", learning_starts=10000,
-        seed=None
+        activation="relu", learning_starts=10000, seq_len_price=25, seq_len_process=30, seq_len_gas_eua=3,
+        price_step_minutes=60, process_step_minutes=0.2, gas_eua_step_minutes=720, seed=None
     ):
         # Set random seeds for reproducibility
         if seed is not None:
@@ -297,6 +252,10 @@ class DQNModel:
         self.target_net.load_state_dict(self.policy_net.state_dict())
         self.target_net.eval()
 
+        # self.price_time_features = add_time_features(batch=self.batch_size, seq_len=seq_len_price, step_minutes=price_step_minutes)
+        # self.process_time_features = add_time_features(batch=self.batch_size, seq_len=seq_len_process, step_minutes=process_step_minutes)
+        # self.gas_eua_time_features = add_time_features(batch=self.batch_size, seq_len=seq_len_gas_eua, step_minutes=gas_eua_step_minutes)
+
         self.optimizer = torch.optim.Adam(self.policy_net.parameters(), lr=lr)
         self.replay_buffer = PrioritizedReplayBuffer(buffer_capacity)
 
@@ -326,7 +285,7 @@ class DQNModel:
             np.stack([s["Gas_Price"], s["EUA_Price"]], axis=-1)
             for s in next_states
         ])
-        
+          
         price_states = torch.FloatTensor(price_states)
         process_states = torch.FloatTensor(process_states)
         gas_eua_states = torch.FloatTensor(gas_eua_states)

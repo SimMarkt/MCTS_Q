@@ -498,6 +498,8 @@ class PTGEnv(gym.Env):
         observation = self.get_obs()
         terminated = self._is_terminated()
 
+        self.k += 1
+
         state_c = {
             'i': self.i,
             'j': self.j,
@@ -515,8 +517,6 @@ class PTGEnv(gym.Env):
             info = self._get_info(state_c)
         else:
             info = self._get_info(state_c)
-
-        self.k += 1
 
         # PtGEnv uses only "terminated" because preliminary studies showed no performance difference 
         # between using "terminated" and "truncated" episodes.

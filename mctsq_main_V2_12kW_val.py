@@ -201,7 +201,8 @@ def main():
     Meth_H2O_flow_records = np.zeros((timesteps,))
     Meth_el_heating_records = np.zeros((timesteps,))
     Meth_hot_cold_records = np.zeros((timesteps,))
-    
+
+   
     for i in tqdm(range(timesteps), desc="Simulation"):
         # print("Prediction Step " + str(i))
         for k in range(len(actions)):
@@ -210,9 +211,8 @@ def main():
         if i == action_steps[0]:
             action = 2
         Meth_Actions[i] = action
-        print(i, action)
-        action = get_env_action(action)
-        _,_,_,_,info = env_meth.step([action, state_c])
+        action_env = get_env_action(action)
+        _,_,_,_,info = env_meth.step([action_env, state_c])
         state_c = info['state_c']
         Meth_State_records[i] = info["Meth_State"]
         Meth_T_cat_records[i] = info["Meth_T_cat"].item()

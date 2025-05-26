@@ -212,8 +212,8 @@ def main():
         if i == action_steps[0]:
             action = 2
         Meth_Actions[i] = action
-        action = get_env_action(action)
-        _,_,_,_,info = env_meth.step([action, state_c])
+        action_env = get_env_action(action)
+        _,_,_,_,info = env_meth.step([action_env, state_c])
         state_c = info['state_c']
         Meth_State_records[i] = info["Meth_State"]
         Meth_T_cat_records[i] = info["Meth_T_cat"].item()

@@ -205,6 +205,9 @@ class MCTS_Q:
         self.log_path=log_path
         self.tree_log = []  # List to store tree structure
          
+        self.Meth_State_tl = None
+        self.el_price_tl = None
+        self.pot_reward_tl = None
 
     def learn(self, total_timesteps, callback):
         """
@@ -349,6 +352,7 @@ class MCTS_Q:
                         self.writer.add_scalar("Validation/CumulativeReward", cum_reward_call, global_step=self.step)
                     
                     self.callback_run = False
+                    self.tree_remain = True         # Create a new root_node after validation
         
             # total_duration = time.time() - start_total
             # print("[DEBUG] Time Analysis-----------")
@@ -398,12 +402,12 @@ class MCTS_Q:
         # if self.root_node is not None and self.root_node.state_c == state_c:
         if self.root_node is not None and self.tree_remain and train_eval == "train":
             root_node = self.root_node
-            # # Set the depth of all nodes in the subtree to zero
-            # def reset_depths(node):
-            #     node.depth = 0
-            #     for child in node.children:
-            #         reset_depths(child)
-            # reset_depths(root_node)
+            # Set the depth of all nodes in the subtree, starting from root_node with depth=0
+            def reset_depths(node, depth=0):
+                node.depth = depth
+                for child in node.children:
+                    reset_depths(child, depth + 1)
+            reset_depths(root_node)
 
         else:
             root_node = MCTSNode(state_c, maximum_depth=self.maximum_depth)
@@ -413,7 +417,7 @@ class MCTS_Q:
 
         # root_node = MCTSNode(state_c, maximum_depth=self.maximum_depth)
 
-        start_mcts_core = time.time()
+        # start_mcts_core = time.time()
         for _ in range(self.iterations):
             # start_select = time.time()
             node = self._select(root_node)
@@ -507,9 +511,12 @@ class MCTS_Q:
 
             for idx, child in enumerate(node.children):
                 prior_prob = prior_probs[idx, actions[idx]].item()
-                mean_q_value = child.total_value / child.visits if child.visits > 0 else 0
+                child.mean_q_value = child.total_value / child.visits if child.visits > 0 else 0
+                child.c_puct = c_puct
+                child.prior_prob = prior_prob
+                child.puct_explore = c_puct * prior_prob * math.sqrt(total_visits) / (1 + child.visits)
                 child.puct_score = (
-                    mean_q_value + c_puct * prior_prob * math.sqrt(total_visits) / (1 + child.visits)
+                    child.mean_q_value + child.puct_explore
                 )
 
             # Select the child with the highest PUCT score
@@ -553,9 +560,11 @@ class MCTS_Q:
 
         # step_duration = time.time() - start_step
         # self.time_step += step_duration
+        
         done = terminated or truncated
         child_node = MCTSNode(
-            state_c, parent=node, action=action, done=done, maximum_depth=self.maximum_depth, 
+            state_c, parent=node, action=action, done=done, depth=node.depth+1, maximum_depth=self.maximum_depth, 
+            Meth_state_tr=info['Meth_State'], el_price_tr=info['el_price_act'], pot_reward_tr=info["Pot_Reward"]
         )
         node.children.append(child_node)
         return child_node
@@ -682,15 +691,19 @@ class MCTS_Q:
         """
         node_id = id(node)
         self.tree_log.append({
+            "depth": node.depth,
             "node_id": node_id,
             "parent_id": id(node.parent) if node.parent else None,
             "action": node.action,
-            "depth": node.depth,
             "visits": node.visits,
-            # "total_reward_p_visits": node.total_reward/node.visits,
-            # "Meth_State": self.Meth_State,
-            # "init_el_price": self.init_el_price,
-            # "init_pot_reward": self.init_pot_reward,
+            "prior_prob": node.prior_prob,
+            "c_puct": node.c_puct,
+            "puct_explore": node.puct_explore,
+            "mean_q_value": node.mean_q_value,
+            "puct_score": node.puct_score,
+            "Meth_State": node.Meth_state_tr,
+            "el_price": node.el_price_tr,
+            "pot_reward": node.pot_reward_tr,
         })
         for child in node.children:
             self._log_tree_structure(child)
@@ -700,14 +713,14 @@ class MCTS_Q:
         Save the logged tree structure to a CSV file
         """
         with open(self.log_path + f"tree_structure_{stri}_step{self.step}.csv", "w", newline="") as csvfile:
-            fieldnames = ["node_id", "parent_id", "action", "depth", "visits"]
+            fieldnames = ["depth", "node_id", "parent_id", "action", "visits", "prior_prob", "c_puct", "puct_explore", "mean_q_value", "puct_score", "Meth_State", "el_price", "pot_reward"]
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerows(self.tree_log)
 
 
 class MCTSNode:
-    def __init__(self, state_c, parent=None, action=None, done=False, remaining_steps=42, total_steps=42, depth=0, maximum_depth=42):
+    def __init__(self, state_c, parent=None, action=None, done=False, remaining_steps=42, total_steps=42, depth=0, maximum_depth=42, Meth_state_tr=0, el_price_tr=0, pot_reward_tr=0):
         self.state_c = state_c
         self.parent = parent
         self.action = action
@@ -721,6 +734,14 @@ class MCTSNode:
             self.remaining_steps = total_steps
         self.depth = depth
         self.maximum_depth = maximum_depth
+        self.prior_prob = 0.0
+        self.c_puct = 0.0
+        self.puct_explore = 0.0
+        self.mean_q_value = 0.0 # initialize mean  q value
+        self.puct_score = 0.0  # Initialize PUCT score
+        self.Meth_state_tr = Meth_state_tr
+        self.el_price_tr = el_price_tr
+        self.pot_reward_tr = pot_reward_tr
 
     def is_terminal(self):
         """

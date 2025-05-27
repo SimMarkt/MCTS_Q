@@ -8,7 +8,7 @@
 # ----------------------------------------------------------------------------------------------------------------
 
 # MCTS hyperparameters
-iterations : 50             # No. of iterations for MCTS
+iterations : 100             # No. of iterations for MCTS
 c_init : 1.0                # Initial exploration parameter for PUCT
 c_base : 10                 # Parameter for exploration increase in PUCT
 maximum_depth : 72          # Maximum depth of the tree
@@ -35,7 +35,7 @@ gas_eua_encoder_type : "gru"  # Type of encoder for gas EUA data [Feed forward: 
 
 # Additional settings
 path_log : "/logs/"         # Path to save the logs of the tree structure
-store_interval : 1000       # No. of simulation steps after which the tree structure is logged into a csv file
+store_interval : 250       # No. of simulation steps after which the tree structure is logged into a csv file
 
   
 

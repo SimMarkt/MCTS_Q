@@ -107,7 +107,7 @@ class MCTSQConfiguration():
 
 
 class MCTS_Q:
-    def __init__(self, env, seed, config=None, tb_log=None):
+    def __init__(self, env, seed, config=None, log_path=None, tb_log=None):
         """
         Initialize MCTS_Q with the training environment and DQN agent.
         :param env: The environment
@@ -199,6 +199,11 @@ class MCTS_Q:
         self.time_inf = 0
         self.time_average = []
         self.time_average_copy = []
+
+        # Initialize variables for storing tree structure (for debugging purposes)
+        self.time_store = False  # Flag to store the tree structure
+        self.log_path=log_path
+        self.tree_log = []  # List to store tree structure
          
 
     def learn(self, total_timesteps, callback):
@@ -217,23 +222,26 @@ class MCTS_Q:
         # self.eval_processes = []
 
         for self.step in tqdm(range(total_timesteps), desc='---Training MCTS_Q:'):
-            start_total = time.time()
-            self.time_deepcopy = 0
-            self.time_step = 0
-            self.time_mcts_core = 0
-            self.time_select = 0
-            self.time_expand = 0
-            self.time_eva = 0
-            self.time_back = 0
-            self.time_inf = 0
+            if self.step % self.store_interval == 0 and self.step != 0:
+                self.time_store = True
+
+            # start_total = time.time()
+            # self.time_deepcopy = 0
+            # self.time_step = 0
+            # self.time_mcts_core = 0
+            # self.time_select = 0
+            # self.time_expand = 0
+            # self.time_eva = 0
+            # self.time_back = 0
+            # self.time_inf = 0
 
             # Perform step based on MCTS with DQN values
             action = self.predict(state_c_learn, train_eval="train")
-            start_step = time.time()
+            # start_step = time.time()
             next_state, reward, terminated, _, info = self.env.step([action, state_c_learn])
             state_c_learn = info['state_c']  # Update the state for the next step
-            step_duration = time.time() - start_step
-            self.time_step += step_duration
+            # step_duration = time.time() - start_step
+            # self.time_step += step_duration
 
             # Train DQN parameter
             self.dqn.replay_buffer.push(state, action, reward, next_state, terminated)
@@ -244,8 +252,22 @@ class MCTS_Q:
 
             state = next_state
 
+            # Log the tree structure and save it to a CSV file if time_store is True
+            if self.time_store:
+                self._log_tree_structure(self.root_node)
+                self._save_tree_to_csv("Root")
+                self.time_store = False  # Reset the flag after saving
+                self.tree_log = [] 
+          
             # --- Keep subtree for next step ---
             if self.root_node is not None:
+                # # Compute the maximum depth of the current tree
+                # def get_max_depth(node):
+                #     if not node.children:
+                #         return node.depth
+                #     return max(get_max_depth(child) for child in node.children)
+                # max_depth = get_max_depth(self.root_node)
+
                 # Find the child corresponding to the action taken
                 matching_children = [child for child in self.root_node.children if child.action == action]
                 if matching_children:
@@ -256,6 +278,19 @@ class MCTS_Q:
                     self.root_node = None  # No matching child, start fresh
             else:
                 self.root_node = None  # No previous tree
+
+            # # Log the tree structure and save it to a CSV file if time_store is True
+            # if self.time_store:
+            #     print(id(self.root_node))
+            #     self._log_tree_structure(self.root_node)
+            #     self._save_tree_to_csv("Child")
+            #     self.time_store = False  # Reset the flag after saving
+            #     self.tree_log = [] 
+
+            #     self._log_tree_structure(new_root)
+            #     self._save_tree_to_csv("Child_new")
+            #     self.time_store = False  # Reset the flag after saving
+            #     self.tree_log = [] 
 
             if terminated:
                 state, info = self.env.reset()
@@ -315,35 +350,34 @@ class MCTS_Q:
                     
                     self.callback_run = False
         
-            total_duration = time.time() - start_total
-            print("[DEBUG] Time Analysis-----------")
-            print(f"     mcts core: {self.time_mcts_core/total_duration * 100}%")
-            print(f"     select: {self.time_select/total_duration * 100}%")
-            print(f"     expand core: {self.time_expand/total_duration * 100}%")
-            print(f"     eva core: {self.time_eva/total_duration * 100}%")
-            print(f"     back core: {self.time_back/total_duration * 100}%")
-            print(f"\n     deepcopy: {self.time_deepcopy/total_duration * 100}%")
-            print(f"     step: {self.time_step/total_duration * 100}%")
-            print(f"     inf: {self.time_inf/total_duration * 100}%")
+            # total_duration = time.time() - start_total
+            # print("[DEBUG] Time Analysis-----------")
+            # print(f"     mcts core: {self.time_mcts_core/total_duration * 100}%")
+            # print(f"     select: {self.time_select/total_duration * 100}%")
+            # print(f"     expand core: {self.time_expand/total_duration * 100}%")
+            # print(f"     eva core: {self.time_eva/total_duration * 100}%")
+            # print(f"     back core: {self.time_back/total_duration * 100}%")
+            # print(f"\n     deepcopy: {self.time_deepcopy/total_duration * 100}%")
+            # print(f"     step: {self.time_step/total_duration * 100}%")
+            # print(f"     inf: {self.time_inf/total_duration * 100}%")
 
-            self.time_average.append(self.time_inf)
-            print(f"     average inference time: {np.mean(self.time_average)} seconds")
-            self.time_average_copy.append(self.time_deepcopy)
-            print(f"     average deepcopy time: {np.mean(self.time_average_copy)} seconds")
+            # self.time_average.append(self.time_inf)
+            # print(f"     average inference time: {np.mean(self.time_average)} seconds")
+            # self.time_average_copy.append(self.time_deepcopy)
+            # print(f"     average deepcopy time: {np.mean(self.time_average_copy)} seconds")
 
-            print(f"     Replay buffer size: {len(self.dqn.replay_buffer)} samples")
+            # print(f"     Replay buffer size: {len(self.dqn.replay_buffer)} samples")
 
             # if self.root_node is not None:
-            #     # Compute the maximum depth of the current tree
-            #     def get_max_depth(node):
-            #         if not node.children:
-            #             return node.depth
-            #         return max(get_max_depth(child) for child in node.children)
-            #     max_depth = get_max_depth(self.root_node)
             #     print(f"     Current MCTS tree depth: {max_depth}")
             # else:
             #     print(f"     Current MCTS tree depth: 0")
 
+            # # Log the tree structure and save it to a CSV file if time_store is True
+            # if self.time_store:
+            #     self._log_tree_structure(self.root_node)
+            #     self._save_tree_to_csv()
+            #     self.time_store = False  # Reset the flag after saving
 
         if self.writer is not None:
             self.writer.close()
@@ -364,6 +398,13 @@ class MCTS_Q:
         # if self.root_node is not None and self.root_node.state_c == state_c:
         if self.root_node is not None and self.tree_remain and train_eval == "train":
             root_node = self.root_node
+            # # Set the depth of all nodes in the subtree to zero
+            # def reset_depths(node):
+            #     node.depth = 0
+            #     for child in node.children:
+            #         reset_depths(child)
+            # reset_depths(root_node)
+
         else:
             root_node = MCTSNode(state_c, maximum_depth=self.maximum_depth)
             self.root_node = root_node
@@ -374,29 +415,29 @@ class MCTS_Q:
 
         start_mcts_core = time.time()
         for _ in range(self.iterations):
-            start_select = time.time()
+            # start_select = time.time()
             node = self._select(root_node)
-            select_duration = time.time() - start_select
-            self.time_select += select_duration
+            # select_duration = time.time() - start_select
+            # self.time_select += select_duration
             
             if not node.is_terminal():
-                start_expand = time.time()
+                # start_expand = time.time()
                 node = self._expand(node)
-                expand_duration = time.time() - start_expand
-                self.time_expand += expand_duration
+                # expand_duration = time.time() - start_expand
+                # self.time_expand += expand_duration
 
-            start_eva = time.time()
+            # start_eva = time.time()
             value = self._evaluate(node.state_c)
-            eva_duration = time.time() - start_eva
-            self.time_eva += eva_duration
+            # eva_duration = time.time() - start_eva
+            # self.time_eva += eva_duration
 
-            start_back = time.time()
+            # start_back = time.time()
             self._backpropagate(node, value)
-            back_duration = time.time() - start_back
-            self.time_back += back_duration
+            # back_duration = time.time() - start_back
+            # self.time_back += back_duration
 
-        mcts_core_duration = time.time() - start_mcts_core
-        self.time_mcts_core += mcts_core_duration
+        # mcts_core_duration = time.time() - start_mcts_core
+        # self.time_mcts_core += mcts_core_duration
 
         best_action = root_node.most_visited_child().action
 
@@ -457,12 +498,12 @@ class MCTS_Q:
             process_states = torch.cat(process_states, dim=0)
             gas_eua_states = torch.cat(gas_eua_states, dim=0)
 
-            start_inf = time.time()
+            # start_inf = time.time()
             with torch.no_grad():
                 q_values_batch = self.dqn.policy_net(price_states, process_states, gas_eua_states)  # (num_children, num_actions)
                 prior_probs = F.softmax(q_values_batch, dim=-1)  # (num_children, num_actions)
-            inf_duration = time.time() - start_inf
-            self.time_inf += inf_duration
+            # inf_duration = time.time() - start_inf
+            # self.time_inf += inf_duration
 
             for idx, child in enumerate(node.children):
                 prior_prob = prior_probs[idx, actions[idx]].item()
@@ -497,7 +538,7 @@ class MCTS_Q:
         # new_env = copy.deepcopy(node.env)
         # deepcopy_duration = time.time() - start_deepcopy
         # self.time_deepcopy += deepcopy_duration
-        start_step = time.time()
+        # start_step = time.time()
         if self.callback_run: 
             _, _, terminated, truncated, info = self.callback.env.step([action, state_c])
             state_c = info['state_c']  # Update the state for the next step
@@ -510,11 +551,11 @@ class MCTS_Q:
                 # Train DQN parameter
                 self.dqn.replay_buffer.push(state, action, reward, next_state, terminated)
 
-        step_duration = time.time() - start_step
-        self.time_step += step_duration
+        # step_duration = time.time() - start_step
+        # self.time_step += step_duration
         done = terminated or truncated
         child_node = MCTSNode(
-            state_c, parent=node, action=action, done=done, maximum_depth=self.maximum_depth
+            state_c, parent=node, action=action, done=done, maximum_depth=self.maximum_depth, 
         )
         node.children.append(child_node)
         return child_node
@@ -633,6 +674,36 @@ class MCTS_Q:
         print(f"   >>Cumulative Reward {info['cum_reward']}")
         
         return stats_dict_test
+    
+    def _log_tree_structure(self, node):
+        """
+        Recursively log the tree structure
+        :param node: The current node in the MCTS tree
+        """
+        node_id = id(node)
+        self.tree_log.append({
+            "node_id": node_id,
+            "parent_id": id(node.parent) if node.parent else None,
+            "action": node.action,
+            "depth": node.depth,
+            "visits": node.visits,
+            # "total_reward_p_visits": node.total_reward/node.visits,
+            # "Meth_State": self.Meth_State,
+            # "init_el_price": self.init_el_price,
+            # "init_pot_reward": self.init_pot_reward,
+        })
+        for child in node.children:
+            self._log_tree_structure(child)
+
+    def _save_tree_to_csv(self, stri):
+        """
+        Save the logged tree structure to a CSV file
+        """
+        with open(self.log_path + f"tree_structure_{stri}_step{self.step}.csv", "w", newline="") as csvfile:
+            fieldnames = ["node_id", "parent_id", "action", "depth", "visits"]
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(self.tree_log)
 
 
 class MCTSNode:

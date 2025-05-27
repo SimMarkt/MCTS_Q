@@ -104,7 +104,7 @@ def main():
     # -------------------------------------------Initialize MCTS_Q------------------------------------------------
     print("Initialize MCTS_Q agent...")
     if TrainConfig.model_conf != "test_model":
-        model = MCTS_Q(env_train, seed=TrainConfig.seed_train, config=MCTSQConfig, tb_log=TrainConfig.tb_path + str_id)
+        model = MCTS_Q(env_train, seed=TrainConfig.seed_train, config=MCTSQConfig, log_path=TrainConfig.log_path, tb_log=TrainConfig.tb_path + str_id)
         if TrainConfig.model_conf == "load_model" or TrainConfig.model_conf == "save_load_model":
             model.load(TrainConfig.log_path + str_id)       # Load pretrained model parameters
 

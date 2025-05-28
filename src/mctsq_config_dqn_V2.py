@@ -346,5 +346,9 @@ class DQNModel:
             self.replay_buffer.buffer = deque(data['buffer'], maxlen=data['capacity'])
             self.replay_buffer.priorities = deque(data['priorities'], maxlen=data['capacity'])
 
-    def update_target_network(self):
-        self.target_net.load_state_dict(self.policy_net.state_dict())
+    def update_target_network(self, tau=0.005):
+        """
+        Polyak (soft) update for the target network.
+        """
+        for target_param, param in zip(self.target_net.parameters(), self.policy_net.parameters()):
+            target_param.data.copy_(tau * param.data + (1.0 - tau) * target_param.data)

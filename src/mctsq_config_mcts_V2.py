@@ -57,6 +57,7 @@ class MCTSQConfiguration():
                       'Hidden layers': {'abb' :"_hl", 'var': 'hidden_layers'},
                       'Hidden units': {'abb' :"_hu", 'var': 'hidden_units'},
                       'Activation function': {'abb' :"_af", 'var': 'activation'},
+                      'Softupdate factor': {'abb' :"_ta", 'var': 'tau'},
                       'Process data sequence': {'abb' :"_sq", 'var': 'seq_length'},
                       'Embedding dimensions': {'abb' :"_ed", 'var': 'embed_dim'},
                       'Price encoder type': {'abb' :"_ee", 'var': 'price_encoder_type'},
@@ -83,6 +84,7 @@ class MCTSQConfiguration():
         self.hyp_print('Hidden layers')
         self.hyp_print('Hidden units')
         self.hyp_print('Activation function')
+        self.hyp_print('Softupdate factor')
         self.hyp_print('Process data sequence')
         self.hyp_print('Embedding dimensions')
         self.hyp_print('Price encoder type')
@@ -124,6 +126,8 @@ class MCTS_Q:
             self.__dict__.update(mctsq_config)
 
         self.env = env
+
+        self.seed = seed
 
         self.tb_log = tb_log
         self.writer = None
@@ -209,6 +213,8 @@ class MCTS_Q:
         self.el_price_tl = None
         self.pot_reward_tl = None
 
+        self.treedepth = 0  # Initialize tree depth
+
     def learn(self, total_timesteps, callback):
         """
         Learn MCTS_Q parameters.
@@ -224,7 +230,8 @@ class MCTS_Q:
 
         # self.eval_processes = []
 
-        for self.step in tqdm(range(total_timesteps), desc='---Training MCTS_Q:'):
+        # for self.step in tqdm(range(total_timesteps), desc='---Training MCTS_Q:'):
+        for self.step in range(total_timesteps):
             if self.step % self.store_interval == 0 and self.step != 0:
                 self.time_store = True
 
@@ -249,10 +256,7 @@ class MCTS_Q:
             # Train DQN parameter
             self.dqn.replay_buffer.push(state, action, reward, next_state, terminated)
             loss = self.dqn.update()
-
-            if (self.writer is not None) and (loss is not None):
-                self.writer.add_scalar("Training/Loss", loss, global_step=self.step)
-
+             
             state = next_state
 
             # Log the tree structure and save it to a CSV file if time_store is True
@@ -264,12 +268,12 @@ class MCTS_Q:
           
             # --- Keep subtree for next step ---
             if self.root_node is not None:
-                # # Compute the maximum depth of the current tree
-                # def get_max_depth(node):
-                #     if not node.children:
-                #         return node.depth
-                #     return max(get_max_depth(child) for child in node.children)
-                # max_depth = get_max_depth(self.root_node)
+                # Compute the maximum depth of the current tree
+                def get_max_depth(node):
+                    if not node.children:
+                        return node.depth
+                    return max(get_max_depth(child) for child in node.children)
+                self.treedepth = get_max_depth(self.root_node)
 
                 # Find the child corresponding to the action taken
                 matching_children = [child for child in self.root_node.children if child.action == action]
@@ -281,6 +285,10 @@ class MCTS_Q:
                     self.root_node = None  # No matching child, start fresh
             else:
                 self.root_node = None  # No previous tree
+
+            if (self.writer is not None) and (loss is not None):
+                self.writer.add_scalar("Training/Loss", loss, global_step=self.step)
+                self.writer.add_scalar("Training/TreeDepth", self.treedepth, global_step=self.step)  
 
             # # Log the tree structure and save it to a CSV file if time_store is True
             # if self.time_store:
@@ -324,8 +332,7 @@ class MCTS_Q:
             #             print(f"   >>Cumulative Reward {cum_reward_call}")
             #         self.eval_processes.remove((proc, queue))
 
-            if self.step % self.target_update == 0 and self.step != 0:
-                self.dqn.update_target_network()
+            self.dqn.update_target_network(self.tau)
             
             # Evaluate the policy (In Serial processing)
             if self.callback is not None:
@@ -336,7 +343,8 @@ class MCTS_Q:
                     state_c_call = info['state_c']  # Reset the state for the next episode
                     cum_reward_call = 0 
 
-                    for _ in tqdm(range(self.callback.env.eps_sim_steps), desc='   >>Validation:'):
+                    # for _ in tqdm(range(self.callback.env.eps_sim_steps), desc='   >>Validation:'):
+                    for _ in range(self.callback.env.eps_sim_steps): 
                         action_call = self.predict(state_c_call, train_eval="eval")
                         _, _, terminated_call, _, info = self.callback.env.step([action_call, state_c_call])
                         state_c_call = info['state_c']  # Update the state for the next step
@@ -344,15 +352,17 @@ class MCTS_Q:
                         if terminated_call:
                             break
 
+                    cum_reward_call = info['cum_reward']  # Get cumulative reward from the callback environment
+
                     # callback.stats['steps'].append(self.step)
                     # callback.stats['cum_rew'].append(cum_reward_call)
-                    print(f"   >>Cumulative Reward {info['cum_reward']}")
+                    print(f"   >>Cumulative Reward {cum_reward_call}")
 
                     if self.writer is not None:
                         self.writer.add_scalar("Validation/CumulativeReward", cum_reward_call, global_step=self.step)
                     
                     self.callback_run = False
-                    self.tree_remain = True         # Create a new root_node after validation
+                    self.tree_remain = False         # Create a new root_node after validation
         
             # total_duration = time.time() - start_total
             # print("[DEBUG] Time Analysis-----------")
@@ -397,6 +407,8 @@ class MCTS_Q:
         # root_env_copy = copy.deepcopy(env)
         # deepcopy_duration = time.time() - start_deepcopy
         # self.time_deepcopy += deepcopy_duration
+
+        self.treedepth = 0
 
         # --- Use existing subtree if available ---
         # if self.root_node is not None and self.root_node.state_c == state_c:
@@ -692,8 +704,8 @@ class MCTS_Q:
         node_id = id(node)
         self.tree_log.append({
             "depth": node.depth,
-            "node_id": node_id,
-            "parent_id": id(node.parent) if node.parent else None,
+            # "node_id": node_id,
+            # "parent_id": id(node.parent) if node.parent else None,
             "action": node.action,
             "visits": node.visits,
             "prior_prob": node.prior_prob,
@@ -712,8 +724,8 @@ class MCTS_Q:
         """
         Save the logged tree structure to a CSV file
         """
-        with open(self.log_path + f"tree_structure_{stri}_step{self.step}.csv", "w", newline="") as csvfile:
-            fieldnames = ["depth", "node_id", "parent_id", "action", "visits", "prior_prob", "c_puct", "puct_explore", "mean_q_value", "puct_score", "Meth_State", "el_price", "pot_reward"]
+        with open(self.log_path + f"tree_structure_{stri}_step{self.step}_seed{self.seed}.csv", "w", newline="") as csvfile:
+            fieldnames = ["depth", "action", "visits", "prior_prob", "c_puct", "puct_explore", "mean_q_value", "puct_score", "Meth_State", "el_price", "pot_reward"]
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerows(self.tree_log)

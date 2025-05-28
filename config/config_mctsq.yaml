@@ -8,22 +8,22 @@
 # ----------------------------------------------------------------------------------------------------------------
 
 # MCTS hyperparameters
-iterations : 100             # No. of iterations for MCTS
+iterations : 20             # No. of iterations for MCTS
 c_init : 1.0                # Initial exploration parameter for PUCT
 c_base : 10                 # Parameter for exploration increase in PUCT
 maximum_depth : 72          # Maximum depth of the tree
-tree_remain_interval : 1000000   # Interval for storing the tree structure in the MCTS_Q environment (in steps)
+tree_remain_interval : 10000000   # Interval for storing the tree structure in the MCTS_Q environment (in steps)
 
 # Q-Learning hyperparameters
 learning_rate : 0.001       # Learning rate
 discount_factor : 0.99      # Discount factor for future rewards
 hidden_layers : 2           # Number of hidden layers in the MLP head of the DQN model
 hidden_units : 128          # Number of hidden units in the DQN model
-buffer_size : 100000        # Size of the replay buffer
+buffer_size : 10000000        # Size of the replay buffer
 batch_size : 64             # Batch size for training
 activation : "relu"         # Activation function for the DQN model ("relu", "tanh")
-learning_starts : 1000         # Number of steps before starting to learn
-target_update : 1000         # Interval for updating the target network parameters
+learning_starts : 2000      # Number of steps before starting to learn
+tau : 0.005                 # Softupdate parameter for the target network updates
 
 # Encoder hyperparameters
 seq_length : 30               # Length of the sequence for time-series encoding
@@ -35,7 +35,7 @@ gas_eua_encoder_type : "gru"  # Type of encoder for gas EUA data [Feed forward: 
 
 # Additional settings
 path_log : "/logs/"         # Path to save the logs of the tree structure
-store_interval : 20       # No. of simulation steps after which the tree structure is logged into a csv file
+store_interval : 1000       # No. of simulation steps after which the tree structure is logged into a csv file
 
   
 

@@ -911,7 +911,8 @@ class DQN_Agent:
         self.callback = callback
 
         episode_reward = 0
-        for step in tqdm(range(total_timesteps), desc='---Training DQN:'):
+        # for step in tqdm(range(total_timesteps), desc='---Training DQN:'):
+        for step in range(total_timesteps):
             # Epsilon decay
             self.epsilon = self.epsilon_final + (self.epsilon_start - self.epsilon_final) * \
                 np.exp(-1. * step / self.epsilon_decay)
@@ -922,7 +923,7 @@ class DQN_Agent:
             self.dqn.replay_buffer.push(state, action, reward, next_state, terminated)
             state = next_state
             loss = self.dqn.update()
-            episode_reward += reward
+            episode_reward += info["reward [ct]"]
 
             # Polyak update
             self.dqn.update_target_network(self.tau)
@@ -945,9 +946,9 @@ class DQN_Agent:
                     state_c_call = info['state_c']  # Reset the state for the next episode
                     cum_reward_call = 0 
 
-                    # for _ in tqdm(range(self.callback.env.eps_sim_steps), desc='   >>Validation:'):
+                    #for _ in tqdm(range(self.callback.env.eps_sim_steps), desc='   >>Validation:'):
                     for _ in range(self.callback.env.eps_sim_steps): 
-                        action_call = self.select_action(state_c_call, epsilon=self.epsilon)
+                        action_call = self.select_action(state_c_call, epsilon=0)    # Deterministic policy
                         _, _, terminated_call, _, info = self.callback.env.step([action_call, state_c_call])
                         state_c_call = info['state_c']  # Update the state for the next step
 
@@ -961,7 +962,7 @@ class DQN_Agent:
                     print(f"   >>Cumulative Reward {cum_reward_call}")
 
                     if self.writer is not None:
-                        self.writer.add_scalar("Validation/CumulativeReward", cum_reward_call, global_step=step)
+                        self.writer.add_scalar("DQN/Validation", cum_reward_call, global_step=step)
                     
 
         if self.writer is not None:
@@ -985,3 +986,62 @@ class DQN_Agent:
         process_state = torch.FloatTensor(process_state).unsqueeze(0)
         gas_eua_state = torch.FloatTensor(gas_eua_state).unsqueeze(0)
         return price_state, process_state, gas_eua_state 
+    
+    def test(self, EnvConfig, eps_sim_steps_test):
+        """
+            Test MCTS_Q on the test environment
+        """
+        _, info = self.env.reset()  
+        state_c_test = info['state_c']  # Reset the state for the next episode
+
+        stats = np.zeros((eps_sim_steps_test, len(EnvConfig.stats_names)))    
+        stats_dict_test={}
+
+        for i in tqdm(range(eps_sim_steps_test), desc='---Apply MCTS_Q in the test environment:'):
+            
+            # Perform step based on MCTS with DQN values
+            action = self.select_action(state_c_test, epsilon=0)    # Deterministic policy
+            _, _, terminated, _, info = self.env.step([action, state_c_test])
+            state_c_test = info['state_c']  # Update the state for the next step
+            
+            if terminated:
+                break
+            else:
+                j = 0
+                for val in info:
+                    if j < 24:
+                        if val == 'Meth_Action':
+                            if info[val] == 'standby':
+                                stats[i, j] = 0
+                            elif info[val] == 'cooldown':
+                                stats[i, j] = 1
+                            elif info[val] == 'startup':
+                                stats[i, j] = 2
+                            elif info[val] == 'partial_load':
+                                stats[i, j] = 3
+                            else:
+                                stats[i, j] = 4
+                        else:
+                            stats[i, j] = info[val]
+                    j += 1
+
+            
+        for m in range(len(EnvConfig.stats_names)):
+            stats_dict_test[EnvConfig.stats_names[m]] = stats[:(eps_sim_steps_test), m]
+
+        print(f"   >>Cumulative Reward {info['cum_reward']}")
+        
+        return stats_dict_test
+    
+    
+    def save(self, filepath):
+        """
+        Save the DQN model parameters used by MCTS_Q.
+        """
+        self.dqn.save(filepath)
+
+    def load(self, filepath):
+        """
+        Load the DQN model parameters into MCTS_Q.
+        """
+        self.dqn.load(filepath)

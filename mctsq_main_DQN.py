@@ -83,6 +83,7 @@ def main():
     computational_resources(TrainConfig)
 
     str_id = config_print(EnvConfig, TrainConfig, MCTSQConfig)
+    str_id = "DQN_" + str_id  # Prefix for the model identifier to distinguish it from other models
     
     # -----------------------------------------------Preprocessing------------------------------------------------
     print("Preprocessing...")
@@ -124,7 +125,7 @@ def main():
     if TrainConfig.model_conf != "simple_train":
         print("Postprocessing...")
         # Initialize MCTS_Q for the test environment and load pretrained model parameters
-        model_test = MCTS_Q(env_test_post, seed=TrainConfig.seed_train, config=MCTSQConfig)
+        model_test = DQN_Agent(env_test_post, seed=TrainConfig.seed_train, config=MCTSQConfig)
         model_test.load(TrainConfig.log_path + str_id)
         stats_dict_test = model_test.test(EnvConfig, Preprocess.eps_sim_steps_test)
 

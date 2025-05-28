@@ -193,13 +193,14 @@ class PrioritizedReplayBuffer:
 
     def sample(self, batch_size, beta=0.4):
         priorities = np.array(self.priorities)
-        probabilities = priorities ** self.alpha
-        probabilities /= probabilities.sum()
+        probabilities = priorities ** self.alpha    # Raise priorities to the power of alpha to emphasize higher priority samples (alpha = 0: uniform sampling, alpha > 0: prioritize important samples)
+        probabilities /= probabilities.sum()        # Divide all probabilities by their sum to normalize them, and provide a probability distribution
 
-        indices = np.random.choice(len(self.buffer), batch_size, p=probabilities)
+        indices = np.random.choice(len(self.buffer), batch_size, p=probabilities)   # Randomly sample indices based on the probabilities
         samples = [self.buffer[idx] for idx in indices]
-        weights = (len(self.buffer) * probabilities[indices]) ** (-beta)
-        weights /= weights.max()
+        # len(self.buffer) * probabilities[indices]: The expected number of times each sampled transition would be selected. If sampling were uniform, each probability would be 1/len(self.buffer), so this product would be 1.
+        weights = (len(self.buffer) * probabilities[indices]) ** (-beta)    # Calculate importance sampling weights, where beta is the degree of correction for the bias introduced by prioritized sampling
+        weights /= weights.max()        # Normalize weights to prevent large updates (for stability)
 
         states, actions, rewards, next_states, dones = zip(*samples)
         return (np.array(states), np.array(actions), np.array(rewards),

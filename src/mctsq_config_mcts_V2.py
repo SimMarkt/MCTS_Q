@@ -215,6 +215,7 @@ class MCTS_Q:
 
         self.treedepth = 0  # Initialize tree depth
 
+
     def learn(self, total_timesteps, callback):
         """
         Learn MCTS_Q parameters.
@@ -268,12 +269,12 @@ class MCTS_Q:
           
             # --- Keep subtree for next step ---
             if self.root_node is not None:
-                # Compute the maximum depth of the current tree
-                def get_max_depth(node):
-                    if not node.children:
-                        return node.depth
-                    return max(get_max_depth(child) for child in node.children)
-                self.treedepth = get_max_depth(self.root_node)
+                # # Compute the maximum depth of the current tree
+                # def get_max_depth(node):
+                #     if not node.children:
+                #         return node.depth
+                #     return max(get_max_depth(child) for child in node.children)
+                # self.treedepth = get_max_depth(self.root_node)
 
                 # Find the child corresponding to the action taken
                 matching_children = [child for child in self.root_node.children if child.action == action]
@@ -306,6 +307,7 @@ class MCTS_Q:
             if terminated:
                 state, info = self.env.reset()
                 state_c_learn = info['state_c']  # Reset the state for the next episode
+                self.tree_remain = False
 
             if self.step % self.tree_remain_interval == 0 and self.step != 0:
                 self.tree_remain = False
@@ -426,7 +428,6 @@ class MCTS_Q:
             self.root_node = root_node
             self.tree_remain = True
 
-
         # root_node = MCTSNode(state_c, maximum_depth=self.maximum_depth)
 
         # start_mcts_core = time.time()
@@ -455,6 +456,14 @@ class MCTS_Q:
         # mcts_core_duration = time.time() - start_mcts_core
         # self.time_mcts_core += mcts_core_duration
 
+        # if not root_node.children:
+        #     # No children were expanded, fallback to a random legal action
+        #     print("No children expanded, selecting a random legal action.")
+        #     print()
+        #     legal_actions = root_node.get_legal_actions()
+        #     best_action = random.choice(legal_actions)
+        # else:
+            
         best_action = root_node.most_visited_child().action
 
         # # Explicitly delete the tree to break reference cycles and clear memory
@@ -574,6 +583,7 @@ class MCTS_Q:
         # self.time_step += step_duration
         
         done = terminated or truncated
+        self.treedepth = max(self.treedepth, node.depth + 1)  # Update the maximum tree depth
         child_node = MCTSNode(
             state_c, parent=node, action=action, done=done, depth=node.depth+1, maximum_depth=self.maximum_depth, 
             Meth_state_tr=info['Meth_State'], el_price_tr=info['el_price_act'], pot_reward_tr=info["Pot_Reward"]
@@ -808,4 +818,170 @@ class MCTSNode:
 #             break
 #     # Send results back to main process
 #     result_queue.put((step, cum_reward_call))
-     
+
+class DQN_Agent:
+    def __init__(self, env, seed, config=None, log_path=None, tb_log=None):
+        """
+        DQN agent with epsilon-greedy policy (no MCTS).
+        """
+        if config is not None:
+            self.__dict__.update(config.__dict__)
+        else:
+            with open("config/config_mctsq.yaml", "r") as mctsq_file:
+                mctsq_config = yaml.safe_load(mctsq_file)
+            self.__dict__.update(mctsq_config)
+
+        self.env = env
+        self.seed = seed
+        self.tb_log = tb_log
+        self.writer = None
+        if self.tb_log is not None:
+            self.writer = SummaryWriter(log_dir=self.tb_log)
+
+        with open("config/config_env.yaml", "r") as env_file:
+            env_config = yaml.safe_load(env_file)
+
+        el_input_dim = 1
+        process_input_dim = 6
+        gas_eua_input_dim = 2
+        temporal_encodings = 0
+
+        seq_len_price = env_config['price_ahead'] + env_config['price_past']
+        seq_len_gas_eua = 3
+        price_step_minutes = 60
+        process_step_minutes = self.seq_step * env_config['time_step_op'] / 60
+        gas_eua_step_minutes = 60 * 12
+
+        action_dim = env.action_space.n
+
+        self.dqn = DQNModel(
+            el_input_dim=el_input_dim+temporal_encodings, 
+            process_input_dim=process_input_dim+temporal_encodings, 
+            gas_eua_input_dim=gas_eua_input_dim+temporal_encodings, 
+            action_dim=action_dim, 
+            embed_dim=self.embed_dim,
+            hidden_layers=self.hidden_layers,
+            hidden_units=self.hidden_units,
+            buffer_capacity=self.buffer_size,
+            batch_size=self.batch_size,
+            gamma=self.discount_factor,
+            lr=self.learning_rate,
+            price_encoder_type=self.price_encoder_type,
+            process_encoder_type=self.process_encoder_type,
+            gas_eua_encoder_type=self.gas_eua_encoder_type,
+            activation=self.activation,
+            learning_starts=self.learning_starts,
+            seq_len_price=seq_len_price,
+            seq_len_process=self.seq_length,
+            seq_len_gas_eua=seq_len_gas_eua,
+            price_step_minutes=price_step_minutes,
+            process_step_minutes=process_step_minutes,
+            gas_eua_step_minutes=gas_eua_step_minutes,
+            seed=seed
+        )
+
+        self.epsilon_start = 1.0
+        self.epsilon_final = 0.05
+        self.epsilon_decay = 10000
+        self.epsilon = self.epsilon_start
+
+        self.callback = None  # Callback for evaluation
+
+    def select_action(self, state, epsilon=None):
+        """
+        Epsilon-greedy action selection.
+        """
+        if epsilon is None:
+            epsilon = self.epsilon
+        if random.random() < epsilon:
+            return self.env.action_space.sample()
+        else:
+            price_state, process_state, gas_eua_state = self._get_state(state['obs_norm'])
+            with torch.no_grad():
+                q_values = self.dqn.policy_net(price_state, process_state, gas_eua_state)
+            return int(q_values.argmax().item())
+
+    def learn(self, total_timesteps, callback=None):
+        """
+        Standard DQN learning loop with epsilon-greedy policy.
+        """
+        state, info = self.env.reset()
+        state_c_learn = info['state_c']
+
+        self.callback = callback
+
+        episode_reward = 0
+        for step in tqdm(range(total_timesteps), desc='---Training DQN:'):
+            # Epsilon decay
+            self.epsilon = self.epsilon_final + (self.epsilon_start - self.epsilon_final) * \
+                np.exp(-1. * step / self.epsilon_decay)
+
+            action = self.select_action(state_c_learn, epsilon=self.epsilon)
+            next_state, reward, terminated, _, info = self.env.step([action, state_c_learn])
+            state_c_learn = info['state_c']
+            self.dqn.replay_buffer.push(state, action, reward, next_state, terminated)
+            state = next_state
+            loss = self.dqn.update()
+            episode_reward += reward
+
+            # Polyak update
+            self.dqn.update_target_network(self.tau)
+
+            if terminated:
+                if self.writer is not None:
+                    self.writer.add_scalar("DQN/EpisodeReward", episode_reward, global_step=step)
+                episode_reward = 0
+                state, info = self.env.reset()
+                state_c_learn = info['state_c']
+
+            if self.writer is not None and loss is not None:
+                self.writer.add_scalar("DQN/Loss", loss, global_step=step)
+
+            # Evaluate the policy (In Serial processing)
+            if self.callback is not None:
+                if step % self.callback.val_steps == 0 and step != 0:
+
+                    _, info = self.callback.env.reset()
+                    state_c_call = info['state_c']  # Reset the state for the next episode
+                    cum_reward_call = 0 
+
+                    # for _ in tqdm(range(self.callback.env.eps_sim_steps), desc='   >>Validation:'):
+                    for _ in range(self.callback.env.eps_sim_steps): 
+                        action_call = self.select_action(state_c_call, epsilon=self.epsilon)
+                        _, _, terminated_call, _, info = self.callback.env.step([action_call, state_c_call])
+                        state_c_call = info['state_c']  # Update the state for the next step
+
+                        if terminated_call:
+                            break
+
+                    cum_reward_call = info['cum_reward']  # Get cumulative reward from the callback environment
+
+                    # callback.stats['steps'].append(self.step)
+                    # callback.stats['cum_rew'].append(cum_reward_call)
+                    print(f"   >>Cumulative Reward {cum_reward_call}")
+
+                    if self.writer is not None:
+                        self.writer.add_scalar("Validation/CumulativeReward", cum_reward_call, global_step=step)
+                    
+
+        if self.writer is not None:
+            self.writer.close()
+
+    def _get_state(self, state):
+        price_state = np.array(state["Elec_Price"])[..., np.newaxis]
+        process_state = np.stack([
+            state["T_CAT"],
+            state["H2_in_MolarFlow"],
+            state["CH4_syn_MolarFlow"],
+            state["H2_res_MolarFlow"],
+            state["H2O_DE_MassFlow"],
+            state["Elec_Heating"]
+        ], axis=-1)
+        gas_eua_state = np.stack([
+            state["Gas_Price"],
+            state["EUA_Price"]
+        ], axis=-1)
+        price_state = torch.FloatTensor(price_state).unsqueeze(0)
+        process_state = torch.FloatTensor(process_state).unsqueeze(0)
+        gas_eua_state = torch.FloatTensor(gas_eua_state).unsqueeze(0)
+        return price_state, process_state, gas_eua_state 

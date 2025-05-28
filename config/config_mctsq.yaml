@@ -8,7 +8,7 @@
 # ----------------------------------------------------------------------------------------------------------------
 
 # MCTS hyperparameters
-iterations : 20             # No. of iterations for MCTS
+iterations : 10             # No. of iterations for MCTS
 c_init : 1.0                # Initial exploration parameter for PUCT
 c_base : 10                 # Parameter for exploration increase in PUCT
 maximum_depth : 72          # Maximum depth of the tree

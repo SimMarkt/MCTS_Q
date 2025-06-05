@@ -4,6 +4,7 @@
 #
 # mctsq_config_dqn: 
 # > Provides the Deep Q-Network model including different encoders for energy market and process data
+# > Implements a prioritized replay buffer for experience replay
 # ----------------------------------------------------------------------------------------------------------------
 
 import torch
@@ -12,9 +13,6 @@ import torch.nn.functional as F
 import numpy as np
 from collections import deque
 import random
-
-
-#TODO: Perhaps Include loss which minimizes the the difference between the MCTS policy and DQN policy and also the value (However, the DQN policy directly inferes from the value, not a distinct network -> perhaps not necessary)
 
 # Utility functions for temporal encoding
 def add_time_features(data, step_minutes, start_minute=0):
@@ -47,6 +45,7 @@ def add_time_features_to_gas_eua(data, hours_offsets=[-12, 0, 12]):
 
 # --- ConvAttentionEnc ---
 class ConvAttentionEnc(nn.Module):
+    """Convolutional Neural Network with Attention Mechanism for Encoding Time-Series Data."""
     def __init__(self, input_dim, embed_dim):
         super(ConvAttentionEnc, self).__init__()
         self.conv1 = nn.Conv1d(in_channels=input_dim, out_channels=embed_dim, kernel_size=3, padding=1)
@@ -70,6 +69,7 @@ class ConvAttentionEnc(nn.Module):
 
 # --- GRUAttentionEnc ---
 class GRUAttentionEnc(nn.Module):
+    """GRU-based Encoder with Attention Mechanism for Time-Series Data."""
     def __init__(self, input_dim, embed_dim):
         super(GRUAttentionEnc, self).__init__()
         self.gru = nn.GRU(input_dim, embed_dim, batch_first=True)
@@ -87,6 +87,7 @@ class GRUAttentionEnc(nn.Module):
 
 # --- TransformerEnc ---
 class TransformerEnc(nn.Module):
+    """Transformer Encoder for Time-Series Data."""
     def __init__(self, input_dim, embed_dim, num_heads, num_layers):
         super(TransformerEnc, self).__init__()
         self.embedding = nn.Linear(input_dim, embed_dim)
@@ -106,6 +107,7 @@ class TransformerEnc(nn.Module):
 
 # --- GasEUAEncoder ---
 class GasEUAEncoder(nn.Module):
+    """Encoder for Gas and EUA Data, supporting MLP or GRU-based architectures."""
     def __init__(self, input_dim, embed_dim, encoder_type="mlp"):
         super(GasEUAEncoder, self).__init__()
         if encoder_type == "mlp":
@@ -129,6 +131,9 @@ class GasEUAEncoder(nn.Module):
         return self.encoder(x)
     
 def get_activation(activation_name):
+    """
+    Returns the activation function based on the provided name in config.mctsq.yaml.
+    """
     if activation_name.lower() == "relu":
         return nn.ReLU()
     elif activation_name.lower() == "tanh":
@@ -226,6 +231,7 @@ class TripleEncoderDQN(nn.Module):
         return self.fc_layers(combined)
     
 class PrioritizedReplayBuffer:
+    """Prioritized Experience Replay Buffer for DQN."""
     def __init__(self, capacity, alpha=0.6):
         self.buffer = deque(maxlen=capacity)
         self.priorities = deque(maxlen=capacity)
@@ -258,6 +264,9 @@ class PrioritizedReplayBuffer:
         return len(self.buffer)
 
 class DQNModel:
+    """
+    Deep Q-Network model with three encoders for different time-series modalities.
+    """
     def __init__(
         self,
         el_input_dim, process_input_dim, gas_eua_input_dim, 
@@ -301,6 +310,9 @@ class DQNModel:
         self.replay_buffer = PrioritizedReplayBuffer(buffer_capacity)
 
     def update(self):
+        """
+        Update the policy network using a batch from the replay buffer.
+        """
         if (len(self.replay_buffer) < self.batch_size) or (len(self.replay_buffer) < self.learning_starts):
             return None
 

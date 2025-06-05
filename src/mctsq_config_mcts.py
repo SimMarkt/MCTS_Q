@@ -4,107 +4,19 @@
 #
 # mctsq_config_mcts: 
 # > Incorporates the MCTS algorithm with DQN guidance on tree search
+# > Uses a deep copy of the environment in the MCTS procedure
 # ----------------------------------------------------------------------------------------------------------------
 
 import math
 import random
 import copy
 import yaml
-import csv
 import numpy as np
-from tqdm import tqdm
 import torch
 import torch.nn.functional as F
 import gc
-import multiprocessing
 from torch.utils.tensorboard import SummaryWriter
-
-import time
-
 from src.mctsq_config_dqn import DQNModel
-
-#TODO: Include random seeds
-#TODO: Include deterministic=True für validation and testing??
-#TODO: only store best model
-
-class MCTSQConfiguration():
-    """
-    Configuration class for MCTS_Q algorithm.
-    This class loads the configuration from a YAML file and initializes the MCTS_Q algorithm with the specified parameters.
-    """
-
-    def __init__(self):
-        # Load the algorithm configuration from the YAML file
-        with open("config/config_mctsq.yaml", "r") as env_file:
-            mctsq_config = yaml.safe_load(env_file)
-
-        # Unpack data from dictionary
-        self.__dict__.update(mctsq_config)
-
-        self.rl_alg_hyp = mctsq_config
-
-        self.str_alg = ""          # Initialize the string for the algorithm settings (used for file identification)
-        # Nested dictionary with hyperparameters, including abbreviation ('abb') and variable name ('var') 
-        # 'var' must match the notation in MCTS_Q/config/config_mctsq.yaml
-        self.hyper = {'Iterations': {'abb' :"_it", 'var': 'iterations'},
-                      'PUCT Initial Exploration': {'abb' :"_pu", 'var': 'c_init'},
-                      'PUCT Exploration Increase': {'abb' :"_pi", 'var': 'c_base'},
-                      'Max Tree depth': {'abb' :"_md", 'var': 'maximum_depth'},
-                      'Learning rate': {'abb' :"_al", 'var': 'learning_rate'},
-                      'Discount factor': {'abb' :"_ga", 'var': 'discount_factor'},
-                      'Replay buffer size': {'abb' :"_rb", 'var': 'buffer_size'},
-                      'Batch size': {'abb' :"_bs", 'var': 'batch_size'},
-                      'Hidden layers': {'abb' :"_hl", 'var': 'hidden_layers'},
-                      'Hidden units': {'abb' :"_hu", 'var': 'hidden_units'},
-                      'Activation function': {'abb' :"_af", 'var': 'activation'},
-                      'Process data sequence': {'abb' :"_sq", 'var': 'seq_length'},
-                      'Embedding dimensions': {'abb' :"_ed", 'var': 'embed_dim'},
-                      'Price encoder type': {'abb' :"_ee", 'var': 'price_encoder_type'},
-                      'Process encoder type': {'abb' :"_pe", 'var': 'process_encoder_type'},
-                      'Gas EUA encoder type': {'abb' :"_ge", 'var': 'gas_eua_encoder_type'},
-                      }         
-
-    def get_hyper(self):
-        """
-            Displays the algorithm's hyperparameters and returns a string identifier for file identification.
-            :return str_alg: The hyperparameter settings as a string for file identification
-        """
-
-        # Display the chosen algorithm and its hyperparameters
-        print(f"    > MCTS_Q algorithm : >>> <<<")
-        self.hyp_print('Iterations')
-        self.hyp_print('PUCT Initial Exploration')
-        self.hyp_print('PUCT Exploration Increase')
-        self.hyp_print('Max Tree depth')
-        self.hyp_print('Learning rate')
-        self.hyp_print('Discount factor')
-        self.hyp_print('Replay buffer size')
-        self.hyp_print('Batch size')
-        self.hyp_print('Hidden layers')
-        self.hyp_print('Hidden units')
-        self.hyp_print('Activation function')
-        self.hyp_print('Process data sequence')
-        self.hyp_print('Embedding dimensions')
-        self.hyp_print('Price encoder type')
-        self.hyp_print('Process encoder type')
-        self.hyp_print('Gas EUA encoder type')
-        print(' ')
-
-        return self.str_alg
-
-    def hyp_print(self, hyp_name: str):
-        """
-            Displays the value of a specific hyperparameter and adds it to the string identifier for file naming
-            :param hyp_name: Name of the hyperparameter to display
-        """
-        assert hyp_name in self.hyper, f"Specified hyperparameter ({hyp_name}) is not part of the implemented settings!"
-        length_str = len(hyp_name)
-        if length_str > 32:         print(f"         {hyp_name} ({self.hyper[hyp_name]['abb']}): {self.rl_alg_hyp[self.hyper[hyp_name]['var']]}")
-        elif length_str > 22:       print(f"         {hyp_name} ({self.hyper[hyp_name]['abb']}):\t {self.rl_alg_hyp[self.hyper[hyp_name]['var']]}")
-        elif length_str > 15:       print(f"         {hyp_name} ({self.hyper[hyp_name]['abb']}):\t\t {self.rl_alg_hyp[self.hyper[hyp_name]['var']]}")
-        else:                       print(f"         {hyp_name} ({self.hyper[hyp_name]['abb']}):\t\t\t {self.rl_alg_hyp[self.hyper[hyp_name]['var']]}")
-        self.str_alg += self.hyper[hyp_name]['abb'] + str(self.rl_alg_hyp[self.hyper[hyp_name]['var']])
-
 
 class MCTS_Q:
     def __init__(self, env, seed, config=None, tb_log=None):
@@ -118,7 +30,6 @@ class MCTS_Q:
         if config is not None:
             self.__dict__.update(config.__dict__)
         else:
-            # Fallback: load from YAML if config not provided
             with open("config/config_mctsq.yaml", "r") as env_file:
                 mctsq_config = yaml.safe_load(env_file)
             self.__dict__.update(mctsq_config)
@@ -165,15 +76,6 @@ class MCTS_Q:
         self.action_type = "discrete"
 
         self.deterministic = False
-
-        self.time_deepcopy = 0
-        self.time_step = 0
-        self.time_mcts_core = 0
-        self.time_select = 0
-        self.time_expand = 0
-        self.time_eva = 0
-        self.time_back = 0
-        self.time_inf = 0
          
 
     def learn(self, total_timesteps, callback):
@@ -187,23 +89,10 @@ class MCTS_Q:
 
         self.eval_processes = []
 
-        for self.step in tqdm(range(total_timesteps), desc='---Training MCTS_Q:'):
-            start_total = time.time()
-            self.time_deepcopy = 0
-            self.time_step = 0
-            self.time_mcts_core = 0
-            self.time_select = 0
-            self.time_expand = 0
-            self.time_eva = 0
-            self.time_back = 0
-            self.time_inf = 0
-
+        for self.step in range(total_timesteps):
             # Perform step based on MCTS with DQN values
             action = self.predict(self.env)
-            start_step = time.time()
             next_state, reward, terminated, _, _ = self.env.step(action)
-            step_duration = time.time() - start_step
-            self.time_step += step_duration
 
             # Train DQN parameter
             self.dqn.replay_buffer.push(state, action, reward, next_state, terminated)
@@ -216,28 +105,6 @@ class MCTS_Q:
             if terminated:
                 break
 
-            # # Evaluate the policy (in parallel, non-blocking)
-            # if callback is not None:
-            #     if self.step % callback.val_steps == 0 and self.step != 0:
-            #         callback.model = self   # Set the MCTS_Q model for the callback
-            #         result_queue = multiprocessing.Queue()
-            #         p = multiprocessing.Process(
-            #             target=run_callback_eval,
-            #             args=(self.step, callback, result_queue)
-            #         )
-            #         p.start()
-            #         self.eval_processes.append((p, result_queue))
-
-            # # Check for finished evaluation processes and collect results
-            # for proc, queue in self.eval_processes[:]:
-            #     if not proc.is_alive():
-            #         proc.join()
-            #         if not queue.empty():
-            #             step_eval, cum_reward_call = queue.get()
-            #             callback.stats.append(step_eval, cum_reward_call)
-            #             print(f"   >>Cumulative Reward {cum_reward_call}")
-            #         self.eval_processes.remove((proc, queue))
-
             if self.step % self.target_update == 0 and self.step != 0:
                 self.dqn.update_target_network()
             
@@ -247,31 +114,17 @@ class MCTS_Q:
                     state_call, _ = callback.env.reset()
                     cum_reward_call = 0 
 
-                    for _ in tqdm(range(callback.env.eps_sim_steps), desc='   >>Validation:'):
+                    for _ in range(callback.env.eps_sim_steps):
                         action_call = self.predict(callback.env)
                         _, _, terminated_call, _, info = callback.env.step(action_call)
 
                         if terminated_call:
                             break
 
-                    # callback.stats['steps'].append(self.step)
-                    # callback.stats['cum_rew'].append(cum_reward_call)
-                    print(f"   >>Cumulative Reward {info['cum_reward']}")
+                    print(f"   >>Step: {self.step} - Cumulative Reward: {cum_reward_call}")
 
                     if self.writer is not None:
                         self.writer.add_scalar("Validation/CumulativeReward", cum_reward_call, global_step=self.step)
-
-            total_duration = time.time() - start_total
-            print("[DEBUG] Time Analysis-----------")
-            print(f"     mcts core: {self.time_mcts_core/total_duration * 100}%")
-            print(f"     select: {self.time_select/total_duration * 100}%")
-            print(f"     expand core: {self.time_expand/total_duration * 100}%")
-            print(f"     eva core: {self.time_eva/total_duration * 100}%")
-            print(f"     back core: {self.time_back/total_duration * 100}%")
-            print(f"\n     deepcopy: {self.time_deepcopy/total_duration * 100}%")
-            print(f"     step: {self.time_step/total_duration * 100}%")
-            print(f"     inf: {self.time_inf/total_duration * 100}%")
-
 
         if self.writer is not None:
             self.writer.close()
@@ -282,39 +135,17 @@ class MCTS_Q:
         :param env: The environment to search in
         """
         self.deterministic = deterministic
-        # start_deepcopy = time.time()
         root_env_copy = copy.deepcopy(env)
-        # deepcopy_duration = time.time() - start_deepcopy
-        # self.time_deepcopy += deepcopy_duration
 
 
         root_node = MCTSNode(root_env_copy, maximum_depth=self.maximum_depth)
 
-        start_mcts_core = time.time()
         for _ in range(self.iterations):
-            start_select = time.time()
             node = self._select(root_node)
-            select_duration = time.time() - start_select
-            self.time_select += select_duration
-            
             if not node.is_terminal():
-                start_expand = time.time()
                 node = self._expand(node)
-                expand_duration = time.time() - start_expand
-                self.time_expand += expand_duration
-
-            start_eva = time.time()
             value = self._evaluate(node.env)
-            eva_duration = time.time() - start_eva
-            self.time_eva += eva_duration
-
-            start_back = time.time()
             self._backpropagate(node, value)
-            back_duration = time.time() - start_back
-            self.time_back += back_duration
-
-        mcts_core_duration = time.time() - start_mcts_core
-        self.time_mcts_core += mcts_core_duration
 
         best_action = root_node.most_visited_child().action
 
@@ -345,12 +176,9 @@ class MCTS_Q:
 
                 price_state, process_state, gas_eua_state = self._get_state(child.env)  # Get the state representation
 
-                start_inf = time.time()
                 with torch.no_grad():
                     q_values = self.dqn.policy_net(price_state, process_state, gas_eua_state)
                 prior_prob = F.softmax(q_values, dim=-1)[0, child.action].item()
-                inf_duration = time.time() - start_inf
-                self.time_inf += inf_duration
 
                 # Compute the mean Q-value for the child node
                 mean_q_value = child.total_value / child.visits if child.visits > 0 else 0
@@ -359,35 +187,6 @@ class MCTS_Q:
                 child.puct_score = (
                     mean_q_value + c_puct * prior_prob * math.sqrt(total_visits) / (1 + child.visits)
                 )
-
-            # # --- Batch inference for all children ---
-            # price_states, process_states, gas_eua_states = [], [], []
-            # actions = []
-            # for child in node.children:
-            #     price_state, process_state, gas_eua_state = self._get_state(node.env)
-            #     price_states.append(price_state)
-            #     process_states.append(process_state)
-            #     gas_eua_states.append(gas_eua_state)
-            #     actions.append(child.action)
-
-            # # Concatenate tensors along batch dimension
-            # price_states = torch.cat(price_states, dim=0)
-            # process_states = torch.cat(process_states, dim=0)
-            # gas_eua_states = torch.cat(gas_eua_states, dim=0)
-
-            # start_inf = time.time()
-            # with torch.no_grad():
-            #     q_values_batch = self.dqn.policy_net(price_states, process_states, gas_eua_states)  # (num_children, num_actions)
-            #     prior_probs = F.softmax(q_values_batch, dim=-1)  # (num_children, num_actions)
-            # inf_duration = time.time() - start_inf
-            # self.time_inf += inf_duration
-
-            # for idx, child in enumerate(node.children):
-            #     prior_prob = prior_probs[idx, actions[idx]].item()
-            #     mean_q_value = child.total_value / child.visits if child.visits > 0 else 0
-            #     child.puct_score = (
-            #         mean_q_value + c_puct * prior_prob * math.sqrt(total_visits) / (1 + child.visits)
-            #     )
 
             # Select the child with the highest PUCT score
             node = max(node.children, key=lambda child: child.puct_score)
@@ -409,14 +208,8 @@ class MCTS_Q:
 
         # Select a random untried action
         action = random.choice(untried_actions)
-        start_deepcopy = time.time()
         new_env = copy.deepcopy(node.env)
-        deepcopy_duration = time.time() - start_deepcopy
-        self.time_deepcopy += deepcopy_duration
-        start_step = time.time()
         _, _, terminated, truncated, _ = new_env.step(action)
-        step_duration = time.time() - start_step
-        self.time_step += step_duration
         done = terminated or truncated
         child_node = MCTSNode(
             new_env, parent=node, action=action, done=done, maximum_depth=self.maximum_depth
@@ -434,11 +227,7 @@ class MCTS_Q:
 
         with torch.no_grad():
             q_values = self.dqn.policy_net(price_state, process_state, gas_eua_state)  # Get Q-values from the DQN
-            policy_probs = F.softmax(q_values, dim=-1)  # Compute policy probabilities using softmax
-            expected_value = torch.sum(policy_probs * q_values, dim=-1).item()  # Compute the expected value of Q-values
-        return expected_value
-        #return q_values.max().item()  # Use the maximum Q-value as the value estimate
-        #TODO: Incorporate n-step return for value estimation
+        return q_values.max().item()  # Use the maximum Q-value as the value estimate
 
     def _backpropagate(self, node, value):
         """
@@ -501,7 +290,7 @@ class MCTS_Q:
         stats = np.zeros((eps_sim_steps_test, len(EnvConfig.stats_names)))    
         stats_dict_test={}
 
-        for i in tqdm(range(eps_sim_steps_test), desc='---Apply MCTS_Q in the test environment:'):
+        for i in range(eps_sim_steps_test):
             
             # Perform step based on MCTS with DQN values
             action = self.predict(self.env)
@@ -538,6 +327,9 @@ class MCTS_Q:
 
 
 class MCTSNode:
+    """
+    Represents a node in the MCTS tree.
+    """
     def __init__(self, env, parent=None, action=None, done=False, remaining_steps=42, total_steps=42, depth=0, maximum_depth=42):
         self.env = env
         self.parent = parent
@@ -598,7 +390,7 @@ class MCTSNode:
 def run_callback_eval(step, callback, result_queue):
     state_call, _ = callback.env.reset()
     cum_reward_call = 0
-    for _ in tqdm(range(callback.env.eps_sim_steps), desc='   >>Validation:'): # range(callback.env.eps_sim_steps): 
+    for _ in range(callback.env.eps_sim_steps):
         action_call = callback.model.predict(callback.env)
         _, reward_call, terminated_call, _, _ = callback.env.step(action_call)
         cum_reward_call += reward_call
@@ -606,4 +398,83 @@ def run_callback_eval(step, callback, result_queue):
             break
     # Send results back to main process
     result_queue.put((step, cum_reward_call))
+
+class MCTSQConfiguration():
+    """
+    Configuration class for MCTS_Q algorithm.
+    This class loads the configuration from a YAML file and initializes the MCTS_Q algorithm with the specified parameters.
+    """
+
+    def __init__(self):
+        # Load the algorithm configuration from the YAML file
+        with open("config/config_mctsq.yaml", "r") as env_file:
+            mctsq_config = yaml.safe_load(env_file)
+
+        # Unpack data from dictionary
+        self.__dict__.update(mctsq_config)
+
+        self.rl_alg_hyp = mctsq_config
+
+        self.str_alg = ""          # Initialize the string for the algorithm settings (used for file identification)
+        # Nested dictionary with hyperparameters, including abbreviation ('abb') and variable name ('var') 
+        # 'var' must match the notation in MCTS_Q/config/config_mctsq.yaml
+        self.hyper = {'Iterations': {'abb' :"_it", 'var': 'iterations'},
+                      'PUCT Initial Exploration': {'abb' :"_pu", 'var': 'c_init'},
+                      'PUCT Exploration Increase': {'abb' :"_pi", 'var': 'c_base'},
+                      'Max Tree depth': {'abb' :"_md", 'var': 'maximum_depth'},
+                      'Learning rate': {'abb' :"_al", 'var': 'learning_rate'},
+                      'Discount factor': {'abb' :"_ga", 'var': 'discount_factor'},
+                      'Replay buffer size': {'abb' :"_rb", 'var': 'buffer_size'},
+                      'Batch size': {'abb' :"_bs", 'var': 'batch_size'},
+                      'Hidden layers': {'abb' :"_hl", 'var': 'hidden_layers'},
+                      'Hidden units': {'abb' :"_hu", 'var': 'hidden_units'},
+                      'Activation function': {'abb' :"_af", 'var': 'activation'},
+                      'Process data sequence': {'abb' :"_sq", 'var': 'seq_length'},
+                      'Embedding dimensions': {'abb' :"_ed", 'var': 'embed_dim'},
+                      'Price encoder type': {'abb' :"_ee", 'var': 'price_encoder_type'},
+                      'Process encoder type': {'abb' :"_pe", 'var': 'process_encoder_type'},
+                      'Gas EUA encoder type': {'abb' :"_ge", 'var': 'gas_eua_encoder_type'},
+                      }         
+
+    def get_hyper(self):
+        """
+        Displays the algorithm's hyperparameters and returns a string identifier for file identification.
+        :return str_alg: The hyperparameter settings as a string for file identification
+        """
+
+        # Display the chosen algorithm and its hyperparameters
+        print(f"    > MCTS_Q algorithm : >>> <<<")
+        self.hyp_print('Iterations')
+        self.hyp_print('PUCT Initial Exploration')
+        self.hyp_print('PUCT Exploration Increase')
+        self.hyp_print('Max Tree depth')
+        self.hyp_print('Learning rate')
+        self.hyp_print('Discount factor')
+        self.hyp_print('Replay buffer size')
+        self.hyp_print('Batch size')
+        self.hyp_print('Hidden layers')
+        self.hyp_print('Hidden units')
+        self.hyp_print('Activation function')
+        self.hyp_print('Process data sequence')
+        self.hyp_print('Embedding dimensions')
+        self.hyp_print('Price encoder type')
+        self.hyp_print('Process encoder type')
+        self.hyp_print('Gas EUA encoder type')
+        print(' ')
+
+        return self.str_alg
+
+    def hyp_print(self, hyp_name: str):
+        """
+        Displays the value of a specific hyperparameter and adds it to the string identifier for file naming
+        :param hyp_name: Name of the hyperparameter to display
+        """
+        assert hyp_name in self.hyper, f"Specified hyperparameter ({hyp_name}) is not part of the implemented settings!"
+        length_str = len(hyp_name)
+        if length_str > 32:         print(f"         {hyp_name} ({self.hyper[hyp_name]['abb']}): {self.rl_alg_hyp[self.hyper[hyp_name]['var']]}")
+        elif length_str > 22:       print(f"         {hyp_name} ({self.hyper[hyp_name]['abb']}):\t {self.rl_alg_hyp[self.hyper[hyp_name]['var']]}")
+        elif length_str > 15:       print(f"         {hyp_name} ({self.hyper[hyp_name]['abb']}):\t\t {self.rl_alg_hyp[self.hyper[hyp_name]['var']]}")
+        else:                       print(f"         {hyp_name} ({self.hyper[hyp_name]['abb']}):\t\t\t {self.rl_alg_hyp[self.hyper[hyp_name]['var']]}")
+        self.str_alg += self.hyper[hyp_name]['abb'] + str(self.rl_alg_hyp[self.hyper[hyp_name]['var']])
+
      

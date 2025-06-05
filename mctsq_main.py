@@ -20,15 +20,10 @@ from src.mctsq_config_env import EnvConfiguration
 from src.mctsq_config_train import TrainConfiguration
 from src.mctsq_config_mcts import MCTSQConfiguration, MCTS_Q
 
-#TODO: FOR TRAINING, VALIDATION AND TESTING ADD PRICE_PAST NUMBER OF VALUES AT THE BEGINNING OF THE TEST SET TO ALIGN WITH FORMER TESTS
-#TODO: Set up everything on HPC (Use RANGE instead of tqdm) and include real training data and test/validation data
-#TODO: Try out tensorboard and save and load of the model
-#TODO: Im einfachen MCTS nochmal ein Ergebnis einfügen als Abbildung
-
 def computational_resources(TrainConfig):
     """
-        Configures computational resources and sets the random seed for the current thread
-        :param TrainConfig: Training configuration (class object)
+    Configures computational resources and sets the random seed for the current thread
+    :param TrainConfig: Training configuration (class object)
     """
     print("Set computational resources...")
     TrainConfig.path = os.path.dirname(__file__)
@@ -50,8 +45,8 @@ def computational_resources(TrainConfig):
 
 def check_env(env_id):
     """
-        Registers the Gymnasium environment if it is not already in the registry
-        :param env_id: Unique identifier for the environment
+    Registers the Gymnasium environment if it is not already in the registry
+    :param env_id: Unique identifier for the environment
     """
     if env_id not in registry:      # Check if the environment is already registered
         try:
@@ -105,11 +100,9 @@ def main():
         if TrainConfig.model_conf == "load_model" or TrainConfig.model_conf == "save_load_model":
             model.load(TrainConfig.log_path + str_id)       # Load pretrained model parameters
 
-
         # -------------------------------------------Training of MCTS_Q-------------------------------------------
         print("Training of MCTS_Q... >>>", str_id, "<<< \n")
         model.learn(total_timesteps=TrainConfig.train_steps, callback=callback_val)
-
         print("...finished training!\n")
 
         # ------------------------------------------------Save model----------------------------------------------

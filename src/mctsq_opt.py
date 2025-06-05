@@ -25,13 +25,13 @@ from src.mctsq_config_env import EnvConfiguration
 
 def calculate_optimum(el_price_data: np.array, gas_price_data: np.array, eua_price_data: np.array, data_name: str, stats_names):
     """
-        Computes the theoretical maximum revenue for the Power-to-Gas process, assuming no operational constraints.
-        :param el_price_data: Electricity market data
-        :param gas_price_data: Gas market data
-        :param eua_price_data: EUA market data
-        :param data_name: Identifier for the dataset
-        :param stats_names: List of statistical variable names for tracking results
-        :return stats_dict_opt: Dictionary containing process and economic data for the theoretical optimal scenario
+    Computes the theoretical maximum revenue for the Power-to-Gas process, assuming no operational constraints.
+    :param el_price_data: Electricity market data
+    :param gas_price_data: Gas market data
+    :param eua_price_data: EUA market data
+    :param data_name: Identifier for the dataset
+    :param stats_names: List of statistical variable names for tracking results
+    :return stats_dict_opt: Dictionary containing process and economic data for the theoretical optimal scenario
     """
 
     EnvConfig = EnvConfiguration()

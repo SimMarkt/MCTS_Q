@@ -17,11 +17,11 @@ from src.mctsq_opt import calculate_optimum
 
 def import_market_data(csvfile: str, type: str, path: str):
     """
-        Imports day-ahead market price data.
-        :param csvfile: Name of the .csv file containing market data ["Time [s]"; <data>].
-        :param type: Type of market data to be imported ('el' for electricity, 'gas' for natural gas, 'eua' for EUA prices).
-        :param path: File path to the RL_PtG project directory.
-        :return: A numpy array containing the extracted market data.
+    Imports day-ahead market price data.
+    :param csvfile: Name of the .csv file containing market data ["Time [s]"; <data>].
+    :param type: Type of market data to be imported ('el' for electricity, 'gas' for natural gas, 'eua' for EUA prices).
+    :param path: File path to the RL_PtG project directory.
+    :return: A numpy array containing the extracted market data.
     """
 
     file_path = path + "/" + csvfile
@@ -42,10 +42,10 @@ def import_market_data(csvfile: str, type: str, path: str):
 
 def import_data(csvfile: str, path: str):
     """
-        Imports experimental methanation process data.
-        :param csvfile: Name of the .csv file containing operational data.
-        :param path: File path to the RL_PtG project directory.
-        :return: A numpy array containing time-series operational data.
+    Imports experimental methanation process data.
+    :param csvfile: Name of the .csv file containing operational data.
+    :param path: File path to the RL_PtG project directory.
+    :return: A numpy array containing time-series operational data.
     """
     # Import historic Data from csv file
     file_path = path + "/" + csvfile
@@ -66,10 +66,10 @@ def import_data(csvfile: str, path: str):
 
 def load_data(EnvConfig, TrainConfig):
     """
-        Loads historical market data and experimental methanation operation data
-        :param TrainConfig: Training configuration (class object)
-        :return dict_price_data: Dictionary containing electricity, gas, and EUA market data
-                dict_op_data: Dictionary containing time-series data for dynamic methanation operations
+    Loads historical market data and experimental methanation operation data
+    :param TrainConfig: Training configuration (class object)
+    :return dict_price_data: Dictionary containing electricity, gas, and EUA market data
+            dict_op_data: Dictionary containing time-series data for dynamic methanation operations
     """
     print("---Load data")
     path = TrainConfig.path
@@ -145,11 +145,11 @@ class Preprocessing():
 
     def __init__(self, dict_price_data, dict_op_data, EnvConfig, TrainConfig):
         """
-            Initializes preprocessing with configuration parameters and data
-            :param dict_price_data: Dictionary containing historical market data.
-            :param dict_op_data: Dictionary containing dynamic process data.
-            :param EnvConfig: Configuration settings for the environment.
-            :param TrainConfig: Configuration settings for training.
+        Initializes preprocessing with configuration parameters and data
+        :param dict_price_data: Dictionary containing historical market data.
+        :param dict_op_data: Dictionary containing dynamic process data.
+        :param EnvConfig: Configuration settings for the environment.
+        :param TrainConfig: Configuration settings for training.
         """
         # Store configuration objects and input data
         self.EnvConfig = EnvConfig
@@ -195,9 +195,9 @@ class Preprocessing():
 
     def preprocessing_rew(self):
         """
-            Data preprocessing, including the calculation of potential rewards.
-            These represent the maximum possible reward in Power-to-Gas (PtG) operation, 
-            either in partial load [part_full_b... = 0] or full load [part_full_b... = 1].
+        Data preprocessing, including the calculation of potential rewards.
+        These represent the maximum possible reward in Power-to-Gas (PtG) operation, 
+        either in partial load [part_full_b... = 0] or full load [part_full_b... = 1].
         """
 
         # Compute PtG operation data for the theoretical optimum (T-OPT), ignoring system dynamics.
@@ -310,9 +310,9 @@ class Preprocessing():
 
     def rand_eps_ind(self):
         """
-            The agent can either:
-            1. Use the entire training set in a single episode (train_len_d == eps_len_d).
-            2. Divide the training set into smaller subsets (train_len_d > eps_len_d), selecting subsets randomly.
+        The agent can either:
+        1. Use the entire training set in a single episode (train_len_d == eps_len_d).
+        2. Divide the training set into smaller subsets (train_len_d > eps_len_d), selecting subsets randomly.
         """
 
         np.random.seed(self.TrainConfig.seed_train)     # Set the random seed for random episode selection
@@ -332,9 +332,9 @@ class Preprocessing():
 
     def dict_env_kwargs(self, type="train"):
         """
-            Returns global model parameters and hyperparameters for the PtG environment as a dictionary.
-            :param type: Specifies whether the dataset is for training ("train") or for validation/testing ("val_test").
-            :return: env_kwargs - Dictionary containing global parameters and hyperparameters.
+        Returns global model parameters and hyperparameters for the PtG environment as a dictionary.
+        :param type: Specifies whether the dataset is for training ("train") or for validation/testing ("val_test").
+        :return: env_kwargs - Dictionary containing global parameters and hyperparameters.
         """
 
         # General environment configurations
@@ -418,11 +418,11 @@ def initial_print():
 
 def config_print(EnvConfig, TrainConfig, MCTSQConfig):
     """
-        Gathers and prints general settings
-        :param EnvConfig: Environment configuration (class object)
-        :param TrainConfig: Training configuration (class object)
-        :param MCTSQConfig: MCTS_Q configuration (class object)
-        :return str_id: String for identification of the present training run
+    Gathers and prints general settings
+    :param EnvConfig: Environment configuration (class object)
+    :param TrainConfig: Training configuration (class object)
+    :param MCTSQConfig: MCTS_Q configuration (class object)
+    :return str_id: String for identification of the present training run
     """
     print("Set training case...")
     print(f"---Training case details: MCTS_Q_{TrainConfig.str_inv} ")

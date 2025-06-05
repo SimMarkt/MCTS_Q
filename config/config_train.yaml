@@ -23,7 +23,7 @@ model_conf : save_model   # Model configuration options:
                             # 'test_model': Load a pretrained model and test its performance
 
 train_steps : 10000000         # No. of training steps
-val_steps : 10000            # Validation interval: No. of steps between evaluations during training
+val_steps : 40000            # Validation interval: No. of steps between evaluations during training
 # Random seeds for reproducibility of neural network initialization and environment randomness:
 r_seed_train : [3654, 467, 9327, 5797, 249, 9419]         # Random seeds for the training set (default: [3654] for single-threaded computations)
 r_seed_test : [605, 5534, 2910, 7653, 8936, 1925]         # Random seeds for the validation set (default: [605] for single-threaded computations)

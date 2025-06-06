@@ -1,12 +1,14 @@
 # MCTS_Q
 
-The **RL_PtG** project provides a framework for the economic optimization of Power-to-Gas (PtG) dispatch using Deep Reinforcement Learning (RL). PtG is a technology that enables the chemical energy storage of renewable energy in chemical energy carriers such as hydrogen (H<sub>2</sub>) or methane (CH<sub>4</sub>). **RL_PtG** facilitates the training of state-of-the-art deep RL algorithms for the optimal control of PtG plants, based on process data and Day-ahead electricity, natural gas, and emissions spot market data.  
+The **MCTS_Q** project provides the source code of a control algorithm combining *Monte Carlo Tree Search* (MCTS) and *Deep-Q-Network* (DQN). 
+It is designed for the economic optimization of Power-to-Gas (PtG) dispatch but can be adapted to other control tasks as well.
+PtG is a technology that enables the chemical energy storage of renewable energy in chemical energy carriers such as hydrogen (H<sub>2</sub>) or methane (CH<sub>4</sub>). by using MCTS and DQN, **MCTS_Q** incorporates both planning and learning capabilities, allowing it to adapt to dynamic environments and optimize the dispatch of PtG plants based on process data and Day-ahead electricity, natural gas, and emissions spot market data.
 
-This repository contains the source code for the **RL_PtG** framework, which has been successfully demonstrated for the autonomous control of a real-world PtG pilot plant in Northern Germany [1].  
+This repository contains the source code for the **MCTS_Q** algorithm and the new version of the PtG environment, which has already been published in the [RL_PtG](https://github.com/SimMarkt/RL_PtG).  
 
-![RL_PtG_int](plots/RL_PtG_int.png)
+![MCTS_Q_int](plots/MCTS_Q_int.png)
 
-*Figure 1: Utilization of deep Reinforcement Learning for dispatch optimization of a real-world Power-to-Gas plant.*
+*Figure 1: Architecture of the MCTS_Q algorithm with DQN-based guidance for the MCTS search tree.*
 
 ---
 
@@ -24,7 +26,9 @@ This repository contains the source code for the **RL_PtG** framework, which has
 
 ## Overview
 
-**RL_PtG** is written in Python and includes a data-driven process model of a real-world PtG plant. This section provides an in-depth explanation of the application and details the algorithms used, the data preprocessing, and the feature design.  
+**MCTS_Q** is written in Python and includes the DQN algorithm with prioritized experience replay and different time-series encoders.
+
+ is written in Python and includes a data-driven process model of a real-world PtG plant. This section provides an in-depth explanation of the application and details the algorithms used, the data preprocessing, and the feature design.  
 
 ### Application
 

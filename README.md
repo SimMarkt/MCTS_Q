@@ -4,7 +4,7 @@ The **MCTS_Q** project provides the source code of a control algorithm combining
 It is designed for the economic optimization of Power-to-Gas (PtG) dispatch but can be adapted to other control tasks as well.
 PtG is a technology that enables the chemical energy storage of renewable energy in chemical energy carriers such as hydrogen (H<sub>2</sub>) or methane (CH<sub>4</sub>). by using MCTS and DQN, **MCTS_Q** incorporates both planning and learning capabilities, allowing it to adapt to dynamic environments and optimize the dispatch of PtG plants based on process data and Day-ahead electricity, natural gas, and emissions spot market data.
 
-This repository contains the source code for the **MCTS_Q** algorithm and the new version of the PtG environment, which has already been published in the [RL_PtG](https://github.com/SimMarkt/RL_PtG).  
+This repository contains the source code for the **MCTS_Q** algorithm and the new version of the **PtGEnv** environment, which has already been published in [RL_PtG](https://github.com/SimMarkt/RL_PtG).  
 
 ![MCTS_Q_int](plots/MCTS_Q_int.png)
 
@@ -26,15 +26,15 @@ This repository contains the source code for the **MCTS_Q** algorithm and the ne
 
 ## Overview
 
-**MCTS_Q** is written in Python and includes the DQN algorithm with prioritized experience replay and different time-series encoders.
-
- is written in Python and includes a data-driven process model of a real-world PtG plant. This section provides an in-depth explanation of the application and details the algorithms used, the data preprocessing, and the feature design.  
+**MCTS_Q** is written in Python and includes a data-driven process model of a real-world PtG plant in **PtGEnv** (adapted from [1, 2]). This section gives an overview of the application and details the MCTS algorithm used. For more information about **PtGEnv**, please refer to [1, 2].
 
 ### Application
 
-The PtG process typically begins with water electrolysis, where an electric current is used to split water (H<sub>2</sub>O) into hydrogen and oxygen (O<sub>2</sub>). **RL_PtG** assumes a proton exchange membrane (PEM) electrolyzer with a load-dependent efficiency modeled after a commercial system [2]. The efficiency has been derived using experimental data and linear regression with nonlinear basis functions [3].  
+The application details are also stated in [2] (https://github.com/SimMarkt/RL_PtG); for the sake of completeness, they are also included here.
 
-In addition to PEM electrolysis, **RL_PtG** incorporates a chemical methanation unit that converts hydrogen and carbon dioxide (CO<sub>2</sub>) into methane. Since biogas contains a significant amount of CO₂ (up to 55%), this process utilizes biogas as a carbon source. To accurately model the methanation unit's process dynamics—which dominate the overall PtG system dynamics—the approach integrates a time-series process model based on experimental data from a real-world pilot plant.  
+The PtG process typically begins with water electrolysis, where an electric current is used to split water (H<sub>2</sub>O) into hydrogen and oxygen (O<sub>2</sub>). **MCTS_Q** assumes a proton exchange membrane (PEM) electrolyzer with a load-dependent efficiency modeled after a commercial system [2]. The efficiency has been derived using experimental data and linear regression with nonlinear basis functions [3].  
+
+In addition to PEM electrolysis, **MCTS_Q** incorporates a chemical methanation unit that converts hydrogen and carbon dioxide (CO<sub>2</sub>) into methane. Since biogas contains a significant amount of CO₂ (up to 55%), this process utilizes biogas as a carbon source. To accurately model the methanation unit's process dynamics—which dominate the overall PtG system dynamics—the approach integrates a time-series process model based on experimental data from a real-world pilot plant.  
 
 The experimental data captures plant behavior during startup, load changes, cooldown, and standby operations of the methanation unit. In standby mode, the reactor temperature is maintained at approximately 190°C to enable a rapid warm startup. The data-driven process model switches between different time-series datasets to simulate dynamic plant operations. This approach is both simple and highly accurate and provides that the plant operates consistently and predictably [3].  
 
@@ -46,15 +46,17 @@ Figure 2 illustrates the current PtG process, where the produced CH<sub>4</sub> 
 
 Additional revenue sources include heat, oxygen, and European Emission Allowances (EUA). Since BS1 and BS2 bind CO₂ in methane, they can generate revenue by selling EUAs through the European Emissions Trading System (EU-ETS). The primary operational costs of the process include electricity and water, with electricity being purchased from the German Day-ahead spot market.  
 
-**RL_PtG** integrates historical electricity market data from `data/spot_market_data/`, sourced from SMARD [4]. The original research and RL training in [1,3] also utilized historical market data for gas and EUA from MONTEL [5]. However, due to licensing restrictions, the present repository only includes synthesized datasets that replicate the statistical properties and non-linear characteristics of the original data.  
+**MCTS_Q** integrates historical electricity market data from `data/spot_market_data/`, sourced from SMARD [4]. The original research and RL training in [1,3] also utilized historical market data for gas and EUA from MONTEL [5]. However, due to licensing restrictions, the present repository only includes synthesized datasets that replicate the statistical properties and non-linear characteristics of the original data.  
 
-The **RL_PtG** framework models the complete PtG process, including PEM electrolysis, chemical methanation, and energy market data, within the **PtGEnv** environment (*Gymnasium* framework). For an overview of the project's directories and files, refer to the [Project Structure](#project-structure) section.  
+The **MCTS_Q** framework models the complete PtG process, including PEM electrolysis, chemical methanation, and energy market data, within the **PtGEnv** environment (*Gymnasium* framework). For an overview of the project's directories and files, refer to the [Project Structure](#project-structure) section.  
 
-![RL_PtG](plots/RL_PtG.png)
+![MCTS_Q_PtG](plots/MCTS_Q_PtG.png)
 
-*Figure 2: Optimization framework for Power-to-Gas dispatch using Reinforcement Learning agents and the PtGEnv environment including the different business cases.*
+*Figure 2: Optimization framework for Power-to-Gas dispatch using MCTS_Q and the PtGEnv environment including the different business cases.*
 
-### Deep RL Algorithms  
+### The MCTS_Q Algorithm
+
+**MCTS_Q** combines *Monte Carlo Tree Search* (MCTS) with *Deep-Q-Network* (DQN) to optimize the PtG dispatch task. MCTS is a planning algorithm that builds a search tree based on simulations, while DQN is a reinforcement learning algorithm that learns a value function to guide the search process.  
 
 Deep reinforcement learning (RL) offers a promising approach for optimizing the economic operation of chemical plants, handling both the **non-linearity** and **stochasticity** of process dynamics and market behavior. 
 
@@ -418,6 +420,15 @@ If you use RL_PtG in your research, please cite it using the following BibTeX en
 ---
 
 ## References
+
+[1] S. Markthaler, "*Optimization of Power-to-Gas system operation and dispatch using Deep Reinforcement Learning*", Dissertation (PhD Thesis), Friedrich-Alexander-Universität Erlangen-Nürnberg, 2025 (not yet been published).
+
+[2] S. Markthaler, "*RL_PtG: Deep Reinforcement Learning for Power-to-Gas dispatch optimization*", 2024, https://github.com/SimMarkt/RL_PtG
+
+
+
+
+
 
 [1] S. Markthaler, "*Katalytische Direktmethanisierung von Biogas: Demonstration
 in industrieller Umgebung und Betriebsoptimierung mittels Reinforcement

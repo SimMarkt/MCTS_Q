@@ -14,35 +14,6 @@ import numpy as np
 from collections import deque
 import random
 
-# Utility functions for temporal encoding
-def add_time_features(data, step_minutes, start_minute=0):
-    """
-    Adds sin/cos time-of-hour encoding to each time step.
-    data: (batch, seq_len, features)
-    Returns: (batch, seq_len, features+2)
-    """
-    batch, seq_len, _ = data.shape
-    minutes = (np.arange(seq_len) * step_minutes + start_minute) % 60
-    radians = 2 * np.pi * minutes / 60
-    sin_time = np.sin(radians)
-    cos_time = np.cos(radians)
-    time_features = np.stack([sin_time, cos_time], axis=-1)  # (seq_len, 2)
-    time_features = np.broadcast_to(time_features, (batch, seq_len, 2))
-    return np.concatenate([data, time_features], axis=-1)
-
-def add_time_features_to_gas_eua(data, hours_offsets=[-12, 0, 12]):
-    """
-    Adds sin/cos time-of-day encoding to each of the 3 gas/EUA price points.
-    data: (batch, 3, features)
-    """
-    batch = data.shape[0]
-    radians = 2 * np.pi * (np.array(hours_offsets) % 24) / 24
-    sin_time = np.sin(radians)
-    cos_time = np.cos(radians)
-    time_features = np.stack([sin_time, cos_time], axis=-1)  # (3, 2)
-    time_features = np.broadcast_to(time_features, (batch, 3, 2))
-    return np.concatenate([data, time_features], axis=-1)
-
 # --- ConvAttentionEnc ---
 class ConvAttentionEnc(nn.Module):
     """Convolutional Neural Network with Attention Mechanism for Encoding Time-Series Data."""
@@ -398,3 +369,32 @@ class DQNModel:
 
     def update_target_network(self):
         self.target_net.load_state_dict(self.policy_net.state_dict())
+
+# Utility functions for temporal encoding
+def add_time_features(data, step_minutes, start_minute=0):
+    """
+    Adds sin/cos time-of-hour encoding to each time step.
+    data: (batch, seq_len, features)
+    Returns: (batch, seq_len, features+2)
+    """
+    batch, seq_len, _ = data.shape
+    minutes = (np.arange(seq_len) * step_minutes + start_minute) % 60
+    radians = 2 * np.pi * minutes / 60
+    sin_time = np.sin(radians)
+    cos_time = np.cos(radians)
+    time_features = np.stack([sin_time, cos_time], axis=-1)  # (seq_len, 2)
+    time_features = np.broadcast_to(time_features, (batch, seq_len, 2))
+    return np.concatenate([data, time_features], axis=-1)
+
+def add_time_features_to_gas_eua(data, hours_offsets=[-12, 0, 12]):
+    """
+    Adds sin/cos time-of-day encoding to each of the 3 gas/EUA price points.
+    data: (batch, 3, features)
+    """
+    batch = data.shape[0]
+    radians = 2 * np.pi * (np.array(hours_offsets) % 24) / 24
+    sin_time = np.sin(radians)
+    cos_time = np.cos(radians)
+    time_features = np.stack([sin_time, cos_time], axis=-1)  # (3, 2)
+    time_features = np.broadcast_to(time_features, (batch, 3, 2))
+    return np.concatenate([data, time_features], axis=-1)

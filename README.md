@@ -210,7 +210,7 @@ Stores process data for two load levels (**OP1** and **OP2**) with different dyn
 
 ### `env/`
 Contains the PtG environments, modeled as a *Gymnasium* class: 
-- **`env/ptg_gym_env_per.py`**: Power-to-Gas environment implementation for improved performance (refer to `mctsq_main_per.py`).
+- **`env/ptg_gym_env_per.py`**: Power-to-Gas environment implementation for improved performance (for details, refer to `mctsq_main_per.py`).
 - **`env/ptg_gym_env.py`**: Power-to-Gas environment implementation.
 
 ### `logs/`
@@ -289,7 +289,7 @@ Stores *TensorBoard logs* for monitoring RL training progress.
   - `computational_resources()` – Configures computational settings.  
   - `check_env()` – Registers the Gymnasium environment if not already present.  
   - `main()` – Runs model training and evaluation.  
-- **`mctsq_main_per.py`** – Includes some performance improvements for the main script (together with `mctsq_config_dqn_per.py`, `mctsq_config_mcts_per.py`, and `ptg_gym_env_per.py`). These improvements are based on faster inference using jit based compiling of the DQN model and batch inference. In addition, a step in `ptg_gym_env_per.py` not only includes the action, but also all necessary state information of the current state of the environment. By doing so, the **MCTS_Q** algorithm avoids the need for deepcopy operations in the MCTS part of the algorithm, which are computationally expensive.
+- **`mctsq_main_per.py`** – Includes some performance improvements for the main script (together with `mctsq_config_dqn_per.py`, `mctsq_config_mcts_per.py`, and `ptg_gym_env_per.py`). These improvements are based on faster inference using jit based compiling of the DQN model and batch inference. In addition, a step in `ptg_gym_env_per.py` not only requires the action, but also the current state information of the environment. By doing so, the **MCTS_Q** algorithm avoids the need for deepcopy operations in the MCTS part of the algorithm, which are computationally expensive.
   - `computational_resources()` – Configures computational settings.  
   - `check_env()` – Registers the Gymnasium environment if not already present.  
   - `main()` – Runs model training and evaluation.  

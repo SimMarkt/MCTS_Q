@@ -199,7 +199,6 @@ class TripleEncoderDQN(nn.Module):
 
         # Add temporal features (convert to numpy if needed)
         if isinstance(price_data, torch.Tensor):
-            print("Numpy1")
             price_data_np = price_data.detach().cpu().numpy()
         else:
             price_data_np = price_data
@@ -208,7 +207,6 @@ class TripleEncoderDQN(nn.Module):
         price_data = torch.FloatTensor(price_data_np).to(price_data.device if isinstance(price_data, torch.Tensor) else 'cpu')
 
         if isinstance(process_data, torch.Tensor):
-            print("Numpy2")
             process_data_np = process_data.detach().cpu().numpy()
         else:
             process_data_np = process_data
@@ -216,7 +214,6 @@ class TripleEncoderDQN(nn.Module):
         process_data = torch.FloatTensor(process_data_np).to(process_data.device if isinstance(process_data, torch.Tensor) else 'cpu')
 
         if isinstance(gas_eua_data, torch.Tensor):
-            print("Numpy3")
             gas_eua_data_np = gas_eua_data.detach().cpu().numpy()
         else:
             gas_eua_data_np = gas_eua_data

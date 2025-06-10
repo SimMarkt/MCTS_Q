@@ -115,9 +115,6 @@ class MCTS_Q:
         self.callback = callback    
 
         for self.step in range(total_timesteps):
-            if self.step % self.store_interval == 0 and self.step != 0:
-                self.time_store = True
-
             # Perform step based on MCTS with DQN values
             action = self.predict(state_c_learn, train_eval="train")
             next_state, reward, terminated, _, info = self.env.step([action, state_c_learn])

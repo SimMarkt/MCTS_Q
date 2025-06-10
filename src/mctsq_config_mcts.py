@@ -17,6 +17,7 @@ import torch.nn.functional as F
 import gc
 from torch.utils.tensorboard import SummaryWriter
 from src.mctsq_config_dqn import DQNModel
+from tqdm import tqdm
 
 class MCTS_Q:
     def __init__(self, env, seed, config=None, tb_log=None):
@@ -89,6 +90,7 @@ class MCTS_Q:
 
         self.eval_processes = []
 
+        # for self.step in tqdm(range(total_timesteps), desc="Training MCTS_Q", unit="step"):
         for self.step in range(total_timesteps):
             # Perform step based on MCTS with DQN values
             action = self.predict(self.env)
@@ -114,6 +116,7 @@ class MCTS_Q:
                     state_call, _ = callback.env.reset()
                     cum_reward_call = 0 
 
+                    # for _ in tqdm(range(callback.env.eps_sim_steps), desc="Validation MCTS_Q", unit="step"):
                     for _ in range(callback.env.eps_sim_steps):
                         action_call = self.predict(callback.env)
                         _, _, terminated_call, _, info = callback.env.step(action_call)
@@ -290,6 +293,7 @@ class MCTS_Q:
         stats = np.zeros((eps_sim_steps_test, len(EnvConfig.stats_names)))    
         stats_dict_test={}
 
+        # for i in tqdm(range(eps_sim_steps_test), desc="Testing MCTS_Q", unit="step"):
         for i in range(eps_sim_steps_test):
             
             # Perform step based on MCTS with DQN values

@@ -20,7 +20,6 @@ This repository contains the source code for the **MCTS_Q** algorithm and the ne
 4. [License](#license)
 5. [Citing](#citing)
 6. [References](#references)
-7. [Acknowledgments](#acknowledgments)
 
 ---
 
@@ -46,7 +45,7 @@ Figure 2 illustrates the current PtG process, where the produced CH<sub>4</sub> 
 
 Additional revenue sources include heat, oxygen, and European Emission Allowances (EUA). Since BS1 and BS2 bind CO₂ in methane, they can generate revenue by selling EUAs through the European Emissions Trading System (EU-ETS). The primary operational costs of the process include electricity and water, with electricity being purchased from the German Day-ahead spot market.  
 
-**MCTS_Q** integrates historical electricity market data from `data/spot_market_data/`, sourced from SMARD [4]. The original research and RL training in [1] also utilized historical market data for gas and EUA from MONTEL [5]. However, due to licensing restrictions, the present repository only includes synthesized datasets that replicate the statistical properties and non-linear characteristics of the original data.  
+**MCTS_Q** integrates historical electricity market data from `data/spot_market_data/`, sourced from SMARD [4]. The original research and Reinforcement Learning (RL) training in [1] also utilized historical market data for gas and EUA from MONTEL [5]. However, due to licensing restrictions, the present repository only includes synthesized datasets that replicate the statistical properties and non-linear characteristics of the original data.  
 
 The **MCTS_Q** framework models the complete PtG process, including PEM electrolysis, chemical methanation, and energy market data, within the **PtGEnv** environment (*Gymnasium* framework). For an overview of the project's directories and files, refer to the [Project Structure](#project-structure) section.  
 
@@ -60,9 +59,9 @@ The **MCTS_Q** framework models the complete PtG process, including PEM electrol
 The principal architecture of **MCTS_Q** is based on previous successful implementations of MCTS with DQN guidance, such as the *AlphaZero* algorithm for board games [6], *MuZero* for Atari games [7], and *MCTS_NNET* for motion control [8].
 The present approach adapts these concepts to the PtG dispatch optimization task with *time-series encoders* for the process dynamics and energy market data and *prioritized experience replay* for higher data efficiency.
 
-Deep reinforcement learning (RL) offers a promising approach for optimizing the economic operation of chemical plants, handling both the **non-linearity** and **stochasticity** of process dynamics and market behavior. 
+Deep RL offers a promising approach for optimizing the economic operation of chemical plants, handling both the **non-linearity** and **stochasticity** of process dynamics and market behavior. 
 
-#### MCTS details
+#### <u>MCTS details</u>
 
 The MCTS algorithm is a rollout-based approach for decision-time planning. In this context, decision-time planning means that computations are performed at the moment a decision is needed, rather than constructing a complete plan in advance [9].
 
@@ -79,7 +78,7 @@ Typical policies are based on *Upper Confidence Bound for Trees* (UCT).
 Q(s,a): Total reward from simulations for this child.
 N(s,a): Number of times this child has been visited.
 N(s): Number of times the parent node has been visited.
-P(s, a): Prior probability of the action a in state s, derived from softmax(Q(s,a)).
+P(s, a): Prior probability of the action a in state s, derived from `softmax(Q(s,a))`.
 c: Exploration constant.
 
 The exloration constant c moreover changes with the number of visits to the parent node, which is defined as follows [6]:
@@ -113,50 +112,19 @@ MCTS propagates the simulation result back up the tree, updating statistics (lik
 | *a_Cooldown* |  ✅               | ✅               | ✅               | ✅               | ✅               |
 | *a_Standby* |   ✅               | ✅               | ✅               | ✅               | ✅               |
 
-#### DQN details
+#### <u>DQN details</u>
 
-**MCTS_Q** uses a Deep-Q-Network (DQN) to estimate the Q-values of actions in the search tree. The DQN is trained using experience replay and target networks to stabilize learning. The DQN architecture consists of several fully connected layers with ReLU activation functions, followed by an output layer that predicts Q-values for each action.
+**MCTS_Q** uses a Deep-Q-Network (DQN) to estimate the Q-values of actions in the search tree. The DQN is trained using experience replay and target networks to stabilize learning. The DQN architecture consists of three different time-series encoders for Day-ahead electricity market data (1hour-resolution), Day-ahead gas and EUA market data (1day-resolution), and process data (Up to 2second-resolution). These encoders can convert the high-dimensional time-series data into a lower-dimensional representation suitable for the DQN. The DQN then processes these representations through several fully connected layers with ReLU activation functions, followed by an output layer that predicts Q-values for each action.
+The DQN model uses the Python library *Pytoch* for neural network implementation and training. The loss function is the mean squared error (MSE) between the predicted Q-values and the target Q-values, which are computed using the Bellman equation. The model is trained using the *Adam* optimizer with standard coefficients. 
 
-For deep RL, **RL_PtG** integrates the *Stable-Baselines3* and *SB3 Contrib* libraries, which provide implementations of various state-of-the-art deep RL algorithms. This project includes the following algorithms from these libraries:  
+The source code of **MCTS_Q** provides three different encoder types:
+- **`ConvAttentionEnc`**: Convolutional Neural Network (Conv1D) with Attention Mechanism.
+- **`GRUAttentionEnc`**: Gated Recurrent Unit (GRU) with Attention Mechanism.
+- **`TransformerEnc`**: Transformer Encoder.
 
-**DQN** [6], **A2C** [7], **PPO** [8], **TD3** [9], **SAC** [10], and **TQC** [11]  
+These encoders can be configured in `config/config_mctsq.yaml` and are used to process the time-series data from the PtG environment. (There are still ongoing investigations to determine which encoder performs best for the PtG dispatch optimization task.)
 
-For detailed information on these implementations, refer to:  
-
-- **Stable-Baselines3:** [https://stable-baselines3.readthedocs.io/en/master/guide/algos.html](https://stable-baselines3.readthedocs.io/en/master/guide/algos.html)  
-- **SB3 Contrib:** [https://sb3-contrib.readthedocs.io/en/master/](https://sb3-contrib.readthedocs.io/en/master/)  
-
-Algorithm configurations for training runs can be set in `config/config_agent.yaml`. 
-
-If you wish to add a new algorithm from *Stable-Baselines3* or *SB3 Contrib*, you must modify the following files accordingly:  
-
-- `config/config_agent.yaml`  
-- `src/rl_config_agent.py`  
-
-Use the existing implementations as a reference when making adjustments.  
-
-### Data Preprocessing and Feature Design  
-
-During the development of **RL_PtG**, two different state feature design approaches were explored for PtG dispatch optimization. These can be configured in `config/config_env.yaml`.
-
-The type of state feature design is controlled via the `raw_modified` parameter:  
-
-- `raw`: The environment provides the RL agent with raw Day-ahead market prices for electricity, gas, and EUA.  
-- `mod`: The environment precomputes a *potential reward* and a *load identifier* for the corresponding Day-ahead period (default: 0-12 hours).  
-
-In `mod`, the environment calculates the potential reward assuming steady-state operation under three conditions (*Partial load*, *Full load*, and *Cooldown*) for the selected Day-ahead period.
-
-The potential reward represents the maximum achievable reward in steady-state operation under the current market conditions in one of these conditions. However, it does not indicate which load level is the most beneficial.  
-
-To address this, the load identifier classifies the most profitable operation type:  
-
-| Load Condition  | Identifier Value |
-|----------------|-----------------|
-| *Cooldown*   | -1              |
-| *Partial Load* | 0              |
-| *Full Load*   | 1              |
-
-Together, the potential reward and load identifier provide insights into the most beneficial operating mode and its expected profitability. However, this approach does not account for plant dynamics, meaning real-world transitions between states may still impact performance.  
+In addition to the encoders, **MCTS_Q** also includes a *Prioritized Experience Replay* mechanism to improve data efficiency. This mechanism prioritizes experiences based on their importance, allowing the DQN to learn more effectively from rare but significant events.
 
 ---
 
@@ -165,11 +133,11 @@ Together, the potential reward and load identifier provide insights into the mos
 The project is organized into the following directories and files:
 
 ```plaintext
-RL_PtG/
+MCTS_Q/
 │
 ├── config/
-│   ├── config_agent.yaml
 │   ├── config_env.yaml
+│   ├── config_mctsq.yaml
 │   └── config_train.yaml
 │
 ├── data/
@@ -178,6 +146,7 @@ RL_PtG/
 │   └── spot_market_data/
 │
 ├── env/
+│   ├── ptg_gym_env_per.py
 │   └── ptg_gym_env.py
 │
 ├── logs/
@@ -185,24 +154,28 @@ RL_PtG/
 ├── plots/
 │
 ├── src/
-│   ├── rl_config_agent.py
-│   ├── rl_config_env.py
-│   ├── rl_config_train.py
-│   ├── rl_opt.py
-│   └── rl_utils.py
+│   ├── mctsq_config_dqn_per.py
+│   ├── mctsq_config_dqn.py
+│   ├── mctsq_config_env.py
+│   ├── mctsq_config_mctsq_per.py
+│   ├── mctsq_config_mctsq.py
+│   ├── mctsq_config_train.py
+│   ├── mctsq_opt.py
+│   └── mctsq_utils.py
 │
 ├── tensorboard/
 │
 ├── requirements.txt
-├── rl_main.py
-└── rl_tb.py
+├── mctsq_main_per.py
+├── mctsq_main.py
+└── mctsq_tb.py
 
 ```
 
 ### `config/`  
 Contains configuration files for the project:  
-- **`config/config_agent.yaml`**: Configuration for the RL agent.  
-- **`config/config_env.yaml`**: Configuration for the PtG environment.  
+- **`config/config_env.yaml`**: Configuration for the PtG environment.
+- **`config/config_mctsq.yaml`**: Configuration for the **MCTS_Q** algorithm including hyperparameters.   
 - **`config/config_train.yaml`**: Configuration for the training procedure.  
 
 ### `data/`
@@ -236,31 +209,63 @@ Stores process data for two load levels (**OP1** and **OP2**) with different dyn
 - **`data/spot_market_data/data-day-ahead-gas-val.csv`**: Day-ahead gas spot market data for validation.
 
 ### `env/`
-Contains the PtG environment, modeled as a *Gymnasium* class: 
+Contains the PtG environments, modeled as a *Gymnasium* class: 
+- **`env/ptg_gym_env_per.py`**: Power-to-Gas environment implementation for improved performance (refer to `mctsq_main_per.py`).
 - **`env/ptg_gym_env.py`**: Power-to-Gas environment implementation.
 
 ### `logs/`
-Stores training logs. RL_PtG saves the best-performing RL algorithm and its parameters during validation.  
+Stores training logs. **MCTS_Q** saves the last algorithm and its parameters after training.  
 
 ### `plots/`
-After training, RL_PtG evaluates the best RL policy on the test set and generates a performance diagram.
+After training, **MCTS_Q** evaluates the algorithm policy on the test set and generates a performance diagram.
 
 ### `src/`
 Contains source code for pre- and postprocessing:
-- **`src/rl_config_agent.py`**: Preprocesses agent settings.
-  - `AgentConfiguration()`: Agent class.
-    - `set_model()`: Initializes a Stable-Baselines3/SB3 Contrib model.
-    - `load_model()`: Loads a pretrained RL model.
-    - `save_model()`: Saves the trained model and replay buffer (if applicable).
+- **`src/mctsq_config_dqn_per.py`**: Incorporates the DQN model in the MCTS_Q algorithm.  The structure of the code is similar to `src/mctsq_config_dqn.py`, but uses a more efficient implementation of the code, which are described at `mctsq_main_per.py`.
+- **`src/mctsq_config_dqn.py`**: Incorporates the DQN model in the MCTS_Q algorithm.
+  - `ConvAttentionEnc()`: Class for Convolutional Neural Network with Attention Mechanism for Encoding Time-Series Data.
+  - `GRUAttentionEnc()`: Class for GRU-based Encoder with Attention Mechanism for Time-Series Data.
+  - `TransformerEnc()`: Class for Transformer Encoder for Time-Series Data.
+  - `GasEUAEncoder()`: Class for encoding Day-ahead gas and EUA market data. (Only MLP and GRU encoders are implemented.)
+  - `get_activation()`: Set up the activation function.
+  - `TripleEncoderDQN()`: Class that combines the encoders used.
+  - `PrioritizedReplayBuffer()`: Class for Prioritized Experience Replay Buffer.
+    - `push()`: Adds a new experience to the buffer and sets its priority to the maximum priority.
+    - `sample()`: Samples a batch of experiences from the buffer based on their priorities.
+    - `update_priorities()`: Updates the priorities of the sampled experiences.
+  - `DQNModel:`: Deep Q-Network model with three encoders for different time-series modalities.
+    - `update()`: Update the policy network using a batch from the replay buffer.
+    - `save()`: Save the policy network, target network, optimizer, and replay buffer.
+    - `load()`: Load the policy network, target network, optimizer, and replay buffer.
+    - `update_target_network()`: Update the target network using the policy network.
+- **`src/mctsq_config_env.py`**: Preprocesses environment settings.
+  - `EnvConfiguration()`: Environment class.
+- **`src/mctsq_config_mcts_per.py`**: Incorporates the MCTS algorithm with DQN guidance on tree search. The structure of the code is similar to `src/mctsq_config_mcts.py`, but uses a more efficient implementation of the code, which are described at `mctsq_main_per.py`. 
+- **`src/mctsq_config_mcts.py`**: Incorporates the MCTS algorithm with DQN guidance on tree search. Uses a deep copy of the environment in the MCTS procedure.
+  - `MCTS_Q()`: MCTS_Q algorithm class.
+    - `learn()`: Learn MCTS_Q parameters.
+    - `predict()`: Perform MCTS search to find the best action `_select()`, `_expand()`, `_evaluate()`, and `_backpropagate()`.
+    - `_select()`: Selects the best child node based on the PUCT tree policy.
+    - `_expand()`: Expands the node by adding a new child node.
+    - `_evaluate()`: Evaluates the node using the Q-values from the DQN model.
+    - `_backpropagate()`: Backpropagates the reward from the leaf node to the root node.
+    - `_get_state()`: Get the current state of the environment and returns is as Pytorch tensors.
+    - `save()`: Save the DQN model parameters used by MCTS_Q.
+    - `load()`: Load pre-trained DQN model parameters.
+    - `test()`: Test MCTS_Q on the test environment.
+  - `MCTSNode()`: Node class.
+    - `is_terminal()`: Checks if the node is terminal.
+    - `is_fully_expanded()`: Checks if all possible actions have been tried at this node.
+    - `get_legal_actions()`: Returns the possible actions for the current node based on the environment's action space.
+    - `most_visited_child()`: Selects the child node with the most visits.
+  - `MCTSQConfiguration()`: MCTSQ class.
     - `get_hyper()`: Displays hyperparameters and generates an identifier string using `hyp_print()`. 
     - `hyp_print()`: Prints and appends hyperparameter values to the identifier.
-- **`src/rl_config_env.py`**: Preprocesses environment settings.
-  - `EnvConfiguration()`: Environment class.
-- **`src/rl_config_train.py`**: Preprocesses training settings.
+- **`src/mctsq_config_train.py`**: Preprocesses training settings.
   - `TrainConfiguration()`: Training class.
-- **`src/rl_opt.py`**: Computes the theoretical optimum T-OPT ignoring plant dynamics.
+- **`src/mctsq_opt.py`**: Computes the theoretical optimum T-OPT ignoring plant dynamics.
   - `calculate_optimum()`: Computes the potential rewards, the load identifiers, and the theoretical optimum T-OPT assuming no operational constraints.          
-- **`src/rl_utils.py`**: Contains utility and helper functions.
+- **`src/mctsq_utils.py`**: Contains utility and helper functions.
   - `import_market_data()`: Loads Day-ahead market price data.
   - `import_data()`: Imports experimental methanation process data.
   - `load_data()`: Loads historical market and process data using `import_market_data()` and `import_data()`.
@@ -270,27 +275,27 @@ Contains source code for pre- and postprocessing:
     - `define_episodes()`: Defines training and evaluation episodes using `rand_eps_ind()`.
     - `rand_eps_ind()`: Selects random subsets of training data.
     - `dict_env_kwargs()`: Stores global parameters and hyperparameters in a dictionary.
-    - `initial_print()`: Displays startup information.
-    - `config_print()`: Prints general configuration settings.
-    - `_make_env()`: Creates and normalizes Gymnasium environments.
-    - `eval_callback_dec()`: Decorator function for evaluation callbacks.
-    - `_make_eval_env()`: Creates an evaluation environment using `_make_env()` and `eval_callback_dec()`.
-    - `create_vec_envs()`: Generates vectorized environments for training, validation, and testing using `_make_eval_env()` and `_make_env()`.
-  - `Postprocessing()`: Postprocessing class.
-    - `test_performance()`: Evaluates the RL policy in the test environment.
-    - `plot_results()`: Generates performance plots.
+  - `initial_print()`: Displays startup information.
+  - `config_print()`: Prints general configuration settings.
+  - `CallbackVal()`: Class for the validation callback.
+  - `create_envs()`: Creates environments for training, validation, and testing.
+  - `plot_results()`: Generates performance plots.
 
 ### `tensorboard/`
 Stores *TensorBoard logs* for monitoring RL training progress.
 
-### **Main Script**  
-- **`rl_main.py`** – The main script for training the RL agent on the PtG dispatch task.  
+### **Main Scripts**  
+- **`mctsq_main.py`** – The main script for training the **MCTS_Q** on the PtG dispatch task.  
+  - `computational_resources()` – Configures computational settings.  
+  - `check_env()` – Registers the Gymnasium environment if not already present.  
+  - `main()` – Runs model training and evaluation.  
+- **`mctsq_main_per.py`** – Includes some performance improvements for the main script (together with `mctsq_config_dqn_per.py`, `mctsq_config_mcts_per.py`, and `ptg_gym_env_per.py`). These improvements are based on faster inference using jit based compiling of the DQN model and batch inference. In addition, a step in `ptg_gym_env_per.py` not only includes the action, but also all necessary state information of the current state of the environment. By doing so, the **MCTS_Q** algorithm avoids the need for deepcopy operations in the MCTS part of the algorithm, which are computationally expensive.
   - `computational_resources()` – Configures computational settings.  
   - `check_env()` – Registers the Gymnasium environment if not already present.  
   - `main()` – Runs model training and evaluation.  
 
 ### **Miscellaneous**  
-- **`rl_tb.py`** – Starts a TensorBoard server for monitoring training progress.  
+- **`mctsq_tb.py`** – Starts a TensorBoard server for monitoring training progress.  
 - **`requirements.txt`** – Lists required Python libraries.
 
 ---
@@ -299,16 +304,14 @@ Stores *TensorBoard logs* for monitoring RL training progress.
 
 **Note:** Python **3.10** or newer is required to run the code. 
 
-### Using a virtual environment
-
 To run **RL_PtG** in a Python virtual environment, follow these steps to install and run the project:
 
 ```bash
 # Clone the repository
-git clone https://github.com/SimMarkt/RL_PtG.git
+git clone https://github.com/SimMarkt/MCTS_Q.git
 
 # Navigate to the project directory
-cd RL_PtG
+cd MCTS_Q
 
 # Create a Python virtual environment
 python -m venv venv
@@ -321,117 +324,20 @@ pip install -r requirements.txt
 
 ```
 
-After setting up the Python environment and installing the necessary packages, you can adjust the environment, agent, and training configurations by modifying the YAML files in the `config/` directory. RL training is initiated by running the main script `rl_main.py`.  
-
-### Using a Docker container
-
-To run **RL_PtG** as a Docker container, follow these steps to install and run the project:
-
-```bash
-# Clone the repository
-git clone https://github.com/SimMarkt/RL_PtG.git
-
-# Navigate to the project directory
-cd RL_PtG
-
-# Build the Docker container using the 'Dockerfile'
-docker build -t rl-ptg:v1 .
-
-# Verify that the image was created successfully
-docker images
-
->>
-REPOSITORY    TAG       IMAGE ID       CREATED         SIZE
-rl-ptg        v1        ...            3 minutes ago   5.87GB
->>
-
-# Run the container
-docker run --rm -it rl-ptg:v1
-
-```
-
-If you need to adjust the environment, agent, or training configurations, you can modify the YAML files located in the `config/` directory. After making these changes, rebuild the Docker image to apply them in the container (you can also optionally update the tag):
-
-```bash
-# Rebuild the Docker image using the 'Dockerfile'
-docker build -t rl-ptg:v1 .
-
-# Verify that the image was created successfully
-docker images
-
->>
-REPOSITORY    TAG       IMAGE ID       CREATED         SIZE
-rl-ptg        v1        ...            1 minutes ago   5.87GB
->>
-
-# Run the container
-docker run --rm -it rl-ptg:v1
-
-```
-
-Please note that training the RL agents can be resource-intensive, especially if you're performing extensive hyperparameter optimization or conducting in-depth analysis using multiple random seeds. In such cases, it's recommended to avoid using the Docker container and instead set up a Python virtual environment (as described above) for better performance.
+After setting up the Python environment and installing the necessary packages, you can adjust the environment, algorithm, and training configurations by modifying the YAML files in the `config/` directory. The training is initiated by running the main script `mctsq_main.py` or `mctsq_main_per.py`. The latter includes performance improvements for the MCTS_Q algorithm, such as faster inference using JIT-based compiling of the DQN model and batch inference. In addition, the `ptg_gym_env_per.py` script is designed to avoid deep copy operations in the MCTS part of the algorithm, which can be computationally expensive.
 
 ### Monitoring
 
-During training, the RL model is periodically evaluated on the validation environment using new, unseen energy market data:  
-- The best-performing algorithm is automatically saved in the `logs/` directory. 
-- Training results, including cumulative rewards on the training and validation sets, as well as algorithm-specific properties, are logged in *TensorBoard* (`tensorboard/`).  
+During training, the **MCTS_Q** model is periodically evaluated on the validation environment using new, unseen energy market data. The training results, including cumulative rewards on the training and validation sets, as well as algorithm-specific properties, are logged in *TensorBoard* (`tensorboard/`).  
 
 To monitor the training and evaluation results, start the **TensorBoard server**:
 
 ```bash
-python rl_tb.py
+python mctsq_tb.py
 ```
-
 Then, open TensorBoard in your browser: http://localhost:6006/
 
-Figure 3 illustrates a learning curve for a PPO algorithm trained on the PtG dispatch optimization task.
-
-![TB_plot](plots/tb_plot.png)
-
-*Figure 3: Graphical user interface of the tensorboard server for RL monitoring with a learning curve of PPO on the validation environment.*
-
-After RL training, RL_PtG selects the best-performing algorithm from `logs/` and evaluates its performance on the *test environment* to assess its generalization capability. The results are visualized and stored in `plots/` (Fig. 4).  
-
-![Results](plots/RL_PtG_train_BS2_OP2_sfmod_ep37_ts600_PPO_al5e-05_ga0.973_ec1e-05_nf21_bs203_hl2_hu358_acReLU_ge0.8002_ep13_naFalse_gsFalse_rs3654_plot.png)
-
-*Figure 4: PPO performance on the test environment including energy market data, PtG process state, methane production, reward, and cumulative reward.*
-
-The file name and title indicate the applied settings:  
-
-| Parameter | Description |  
-|-----------|------------|  
-| **Business Scenario (BS)** | Scenario defining the operational and economic conditions |  
-| **Load Level (OP)** | Operating load level for PtG dispatch |  
-| **State Feature Design (sf)** | Feature engineering method used for state representation |  
-| **Training Episode Length (ep)** | Number of time steps per training episode |  
-| **Time-Step Size (ts)** | Duration of a single time step in the simulation |  
-| **Algorithm (al)** | Deep RL algorithm used |  
-| **Discount Factor (ga)** | Discount rate for future rewards |  
-| **Initial Exploration Coefficient (ie)** | Initial value for exploration-exploitation tradeoff |  
-| **Final Exploration Coefficient (fe)** | Final value for exploration-exploitation tradeoff |  
-| **Exploration Ratio (re)** | Ratio of steps spent in exploration mode |  
-| **Entropy Coefficient (ec)** | Weighting factor for entropy in policy learning |  
-| **Exploration Noise (en)** | Noise applied during action exploration in TD3 |  
-| **N-Step TD Update (ns)** | Number of steps for n-step temporal difference updates |  
-| **N-Step Factor (nf)** | Factor for n-step learning |  
-| **Replay Buffer Size (rb)** | Capacity of the replay memory buffer |  
-| **Batch Size (bs)** | Number of samples used in each training batch |  
-| **No. of Hidden Layers (hl)** | Number of hidden layers in the neural network |  
-| **No. of Hidden Units (hu)** | Number of neurons per hidden layer |  
-| **Activation Function (ac)** | Activation function used in the neural network |  
-| **Generalized Advantage Estimation (ge)** | GAE parameter for advantage computation |  
-| **No. of Epochs (ep)** | Number of training epochs |  
-| **Normalize Advantage (na)** | Whether the advantage function is normalized |  
-| **No. of Quantiles (nq)** | Number of quantiles used in distributional RL |  
-| **No. of Dropped Quantiles (dq)** | Number of quantiles dropped in TQC algorithm |  
-| **No. of Critics (cr)** | Number of critic networks in actor-critic methods |  
-| **Soft Update Parameter (ta)** | τ parameter for soft target updates |  
-| **Learning Starts (ls)** | Number of steps before training begins |  
-| **Training Frequency (tf)** | Frequency of model updates |  
-| **Target Update Interval (tu)** | Interval for updating the target network |  
-| **gSDE Exploration (gs)** | Whether generalized State-Dependent Exploration (gSDE) is used |  
-
+After RL training, **MCTS_Q** selects the current algorithm and evaluates its performance on the *test environment* to assess its generalization capability. The results are visualized and stored in `plots/`.
 
 ---
 
@@ -442,15 +348,12 @@ The file name and title indicate the applied settings:
   - `matplotlib`
   - `gymnasium`
   - `pandas`
-  - `stable-baselines3`
-  - `sb3-contrib`
   - `tensorboard`
   - `tqdm`
   - `numpy`
   - `rich`
   - `torch`
   - `pyyaml`
-  - `protobuf`
 
 To avoid any version conflicts, it is recommended to use the libraries given in `requirements.txt`. 
 
@@ -464,13 +367,13 @@ This project is licensed under [MIT License](LICENSE).
 
 ## Citing
 
-If you use RL_PtG in your research, please cite it using the following BibTeX entry:
+If you use **MCTS_Q** in your research, please cite it using the following BibTeX entry:
 ```BibTeX
-@misc{RL_PtG,
+@misc{MCTS_Q,
   author = {Markthaler, Simon},
-  title = {RL_PtG: Deep Reinforcement Learning for Power-to-Gas dispatch optimization},
-  year = {2024},
-  url = {https://github.com/SimMarkt/RL_PtG}
+  title = {MCTS_Q: Monte Carlo Tree Search with Deep-Q-Network},
+  year = {2025},
+  url = {https://github.com/SimMarkt/MCTS_Q}
 }
 ```
 
@@ -499,37 +402,3 @@ Power-to-Gas plant with PEM electrolysis*", International Journal of Hydrogen En
 
 [9] R. S. Sutton, A. G. Barto, "*Reinforcement Learning: An Introduction*", The MIT Press, Cambridge, Massachusetts, 2018
 
-[1] S. Markthaler, "*Katalytische Direktmethanisierung von Biogas: Demonstration
-in industrieller Umgebung und Betriebsoptimierung mittels Reinforcement
-Learning*", DECHEMA Jahrestreffen der Fachsektion Energie, Chemie
-und Klima (11.-12.03.), Frankfurt/Main, 2024
-
-
-
-[3] S. Markthaler, "*Optimization of Power-to-Gas operation and dispatch using Deep Reinforcement Learning*", Dissertation (PhD Thesis), Friedrich-Alexander-Universität Erlangen-Nürnberg, 2025 (not yet been published).
-
-
-
-[6] V. Mnih, K. Kavukcuoglu, D. Silver, A. A. Rusu, J. Veness, M. G. Bellemare, A. Graves, M. Riedmiller, A. K. Fidjeland, G. Ostrovski, S. Petersen, C. Beattie, A. Sadik, I. Antonoglou, H. King, D. Kumaran, D. Wierstra, S. Legg, D. Hassabis,
-"*Human-level control through deep reinforcement learning*", Nature, 518, 2015, 529–533
-
-[7] V. Mnih, A. P. Badia, M. Mirza, A. Graves, T. P. Lillicrap, T. Harley, D. Silver, K. Kavukcuoglu, "*Asynchronous Methods for Deep Reinforcement Learning*",
-arXiv preprint arXiv:1602.01783, 2016, 1–19
-
-[8] J. Schulman, F. Wolski, P. Dhariwal, A. Radford, O. Klimov, "*Proximal Policy Optimization Algorithms*", arXiv preprint arXiv:1707.06347, 2017, 1–12
-
-[9] S. Fujimoto, H. van Hoof, D. Meger, "*Addressing Function Approximation Error in Actor-Critic Methods*", arXiv preprint arXiv:1802.09477, 2018, 1–15
-
-[10] T. Haarnoja, A. Zhou, K. Hartikainen, G. Tucker, S. Ha, J. Tan, V. Kumar, H. Zhu, A. Gupta, P. Abbeel, S. Levine, "*Soft Actor-Critic Algorithms and Applications*", arXiv preprint arXiv:1812.05905, 2019, 1–17
-
-[11] A. Kuznetsov, P. Shvechikov, A. Grishin, D. Vetrov, "*Controlling Overestimation Bias with Truncated Mixture of Continuous Distributional Quantile Critics*", arXiv preprint arXiv:2005.04269, 2020, 1–17
-
-
----
-
-## Acknowledgments
-
-This project was funded by the German *Federal Ministry for Economic Affairs and Climate Action* within the **Power-to-Biogas**
-project (Project ID: 03KB165). 
-
----

@@ -409,7 +409,6 @@ class Preprocessing():
 
         return env_kwargs
                    
-
 def initial_print():
     print('\n---------------------------------------------------------------------------------------------')    
     print('--MCTS_Q: Monte Carlo Tree Search and Deep Q Network for Power-to-Gas dispatch optimization--')
@@ -450,7 +449,6 @@ class CallbackVal():
         self.stats = {'steps': [],
                       'cum_rew': []}
         self.model = None
-
 
 def create_envs(env_id, env_kwargs_data, TrainConfig):
     """Creates environments for training, validation, and testing"""

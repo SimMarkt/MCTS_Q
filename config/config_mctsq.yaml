@@ -27,7 +27,7 @@ target_update : 1000        # Update interval for the target network  (in mctsq_
 tau : 0.005                 # Softupdate parameter for the target network updates (in mctsq_main_per.py)
 
 # Encoder hyperparameters
-seq_length : 10               # Length of the sequence for time-series encoding
+seq_length : 10               # Length of the sequence for time-series encoding for process data
 seq_step : 30                 # Number of data steps in process data (2-Sec resolution) between two consequitive entries in the sequence (30 steps = 60 seconds)
 embed_dim : 64                # Dimension of the embedding layer
 price_encoder_type : "gru"    # Type of encoder for price data [Conv1D: "conv", GRU: "gru", Transformer: "transformer"]

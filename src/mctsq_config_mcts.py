@@ -391,18 +391,6 @@ class MCTSNode:
         """
         return max(self.children, key=lambda child: child.visits)
     
-def run_callback_eval(step, callback, result_queue):
-    state_call, _ = callback.env.reset()
-    cum_reward_call = 0
-    for _ in range(callback.env.eps_sim_steps):
-        action_call = callback.model.predict(callback.env)
-        _, reward_call, terminated_call, _, _ = callback.env.step(action_call)
-        cum_reward_call += reward_call
-        if terminated_call:
-            break
-    # Send results back to main process
-    result_queue.put((step, cum_reward_call))
-
 class MCTSQConfiguration():
     """
     Configuration class for MCTS_Q algorithm.

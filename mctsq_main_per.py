@@ -5,14 +5,17 @@ GitHub Repository: https://github.com/SimMarkt/MCTS_Q
 
 mctsq_main_per:
 > Main script for training the MCTS_Q algorithm on the PtG-CH4 dispatch task.
-> Adapts to different computational environments: a local personal computer ('pc') or a computing cluster with SLURM management ('slurm').
+> Adapts to different computational environments: 
+        - a local personal computer ('pc') or 
+        - a computing cluster with SLURM management ('slurm').
 > Includes modifications to improve training speed:
-           - Incorporates ptg_gym_env_per.py which requires the current state index (to avoid expensive deepcopy of the environment in MCTS)
-           - Accelerates inference using jit based compiling of the DQN model and batch inference
+        - Incorporates ptg_gym_env_per.py which requires the current state index 
+          (to avoid expensive deepcopy of the environment in MCTS)
+        - Accelerates inference using jit based compiling of the DQN model and batch inference
 ----------------------------------------------------------------------------------------------------
 """
 
-# --------------------------------------------Import Python libraries---------------------------------------------
+# -------------------------------------Import Python libraries--------------------------------------
 import os
 import torch as th
 
@@ -129,6 +132,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-
-

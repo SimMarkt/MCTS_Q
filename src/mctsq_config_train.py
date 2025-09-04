@@ -1,10 +1,12 @@
-# ----------------------------------------------------------------------------------------------------------------
-# MCTS_Q: Monte Carlo Tree Search with Deep-Q-Network
-# GitHub Repository: https://github.com/SimMarkt/MCTS_Q
-#
-# mctsq_config_train: 
-# > Manages the configuration and settings for MCTS_Q training.
-# ----------------------------------------------------------------------------------------------------------------
+"""
+----------------------------------------------------------------------------------------------------
+MCTS_Q: Monte Carlo Tree Search with Deep-Q-Network
+GitHub Repository: https://github.com/SimMarkt/MCTS_Q
+
+mctsq_config_train: 
+> Manages the configuration and settings for MCTS_Q training.
+----------------------------------------------------------------------------------------------------
+"""
 
 import yaml
 

@@ -1,6 +1,24 @@
-# Custom Environment implementing the Gymnasium interface for PtG dispatch optimization.
-# Version 2.0
-# Modifications: Step requires state index to avoid deepcopy of the environment in MCTS_Q
+"""
+Custom Environment implementing the Gymnasium interface for PtG dispatch optimization.
+Version 2.0
+Modifications: Step requires state index to avoid deepcopy of the environment in MCTS_Q
+
+Abbreviations:
+   SNG: Synthetic natural gas
+   EUA: European emission allowances
+   CHP: Combined heat and power plant
+   CH4: Methane
+   H2: Hydrogen
+   O2: Oxygen
+   CO2: Carbon dioxide
+   H2O_DE: Water vapor (steam)
+   LHV: Lower heating value
+   EEG: German Renewable Energy Act (Erneuerbare-Energien-Gesetz)
+
+Optional modifications: Include Meth_State and/or Action history in the observation space
+Optional modifications: Include temporal encoding in the observation space 
+                        (sin/cos for minute within hour and hour within day)
+"""
 
 import gymnasium as gym
 from gymnasium import spaces
@@ -9,22 +27,6 @@ import math
 import copy
 
 ep_index = 0
-
-# Abbreviations:
-#   SNG: Synthetic natural gas
-#   EUA: European emission allowances
-#   CHP: Combined heat and power plant
-#   CH4: Methane
-#   H2: Hydrogen
-#   O2: Oxygen
-#   CO2: Carbon dioxide
-#   H2O_DE: Water vapor (steam)
-#   LHV: Lower heating value
-#   EEG: German Renewable Energy Act (Erneuerbare-Energien-Gesetz)
-
-#TODO: Include Meth_State and/or Action history in the observation space
-#TODO: Perhaps include temporal encoding in the observation space (sin/cos for minute within hour and hour within day)
-#TODO: Perhaps use truncate instead of terminated
 
 class PTGEnv(gym.Env):
     """Custom Environment implementing the Gymnasium interface for PtG dispatch optimization."""

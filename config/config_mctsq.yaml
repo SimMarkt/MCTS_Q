@@ -1,18 +1,20 @@
-# ----------------------------------------------------------------------------------------------------------------
+# --------------------------------------------------------------------------------------------------
 # MCTS_Q: Monte Carlo Tree Search with Deep-Q-Network
 # GitHub Repository: https://github.com/SimMarkt/MCTS_Q
 #
-# config_mcts: 
+# config_mcts:
 # > Configuration file for the MTCS in the PtG-CH4 environment
 # > The algorithm uses Upper Confidence Bound for Trees (UCT) to balance exploration and exploitation
-# ----------------------------------------------------------------------------------------------------------------
+# --------------------------------------------------------------------------------------------------
 
 # MCTS hyperparameters
 iterations : 50             # No. of iterations for MCTS
 c_init : 1.0                # Initial exploration parameter for PUCT
 c_base : 10                 # Parameter for exploration increase in PUCT
 maximum_depth : 72          # Maximum depth of the tree
-tree_remain_interval : 1000 # Interval for updating the tree structure in the MCTS_Q environment (in steps), only used with mctsq_main_per.py
+# Interval for updating the tree structure in the MCTS_Q environment (in steps),
+# only used with mctsq_main_per.py
+tree_remain_interval : 1000 
 
 # Q-Learning hyperparameters
 learning_rate : 0.001       # Learning rate
@@ -22,14 +24,19 @@ hidden_units : 128          # Number of hidden units in the DQN model
 buffer_size : 10000000      # Size of the replay buffer
 batch_size : 256            # Batch size for training
 activation : "relu"         # Activation function for the DQN model ("relu", "tanh")
-learning_starts : 10     # Number of steps before starting to learn
-target_update : 1000        # Update interval for the target network  (in mctsq_main.py)
+learning_starts : 10        # Number of steps before starting to learn
+target_update : 1000        # Update interval for the target network (in mctsq_main.py)
 tau : 0.005                 # Softupdate parameter for the target network updates (in mctsq_main_per.py)
 
 # Encoder hyperparameters
-seq_length : 10               # Length of the sequence for time-series encoding for process data
-seq_step : 30                 # Number of data steps in process data (2-Sec resolution) between two consequitive entries in the sequence (30 steps = 60 seconds)
-embed_dim : 64                # Dimension of the embedding layer
-price_encoder_type : "gru"    # Type of encoder for price data [Conv1D: "conv", GRU: "gru", Transformer: "transformer"]
-process_encoder_type : "gru"  # Type of encoder for process data [Conv1D: "conv", GRU: "gru", Transformer: "transformer"]
-gas_eua_encoder_type : "gru"  # Type of encoder for gas EUA data [Feed forward: "mlp", GRU: "gru"]
+seq_length : 10             # Length of the sequence for time-series encoding for process data
+# Number of data steps in process data (2-Sec resolution) between two consequitive entries
+# in the sequence (30 steps = 60 seconds)
+seq_step : 30
+embed_dim : 64              # Dimension of the embedding layer
+# Type of encoder for price data [Conv1D: "conv", GRU: "gru", Transformer: "transformer"]
+price_encoder_type : "gru"
+# Type of encoder for process data [Conv1D: "conv", GRU: "gru", Transformer: "transformer"]
+process_encoder_type : "gru"
+# Type of encoder for gas EUA data [Feed forward: "mlp", GRU: "gru"]
+gas_eua_encoder_type : "gru"

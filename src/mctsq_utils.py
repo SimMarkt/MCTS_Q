@@ -1,10 +1,12 @@
-# ----------------------------------------------------------------------------------------------------------------
-# MCTS_Q: Monte Carlo Tree Search with Deep-Q-Network
-# GitHub Repository: https://github.com/SimMarkt/MCTS_Q
-#
-# mctsq_utils: 
-# > Utiliy/Helper functions
-# ----------------------------------------------------------------------------------------------------------------
+"""
+----------------------------------------------------------------------------------------------------
+MCTS_Q: Monte Carlo Tree Search with Deep-Q-Network
+GitHub Repository: https://github.com/SimMarkt/MCTS_Q
+
+mctsq_utils: 
+> Utiliy/Helper functions
+----------------------------------------------------------------------------------------------------
+"""
 
 import pandas as pd
 import numpy as np

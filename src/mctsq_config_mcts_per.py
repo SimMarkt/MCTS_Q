@@ -1,13 +1,15 @@
-# ----------------------------------------------------------------------------------------------------------------
-# MCTS_Q: Monte Carlo Tree Search with Deep-Q-Network
-# GitHub Repository: https://github.com/SimMarkt/MCTS_Q
-#
-# mctsq_config_mcts_per: 
-# > Incorporates the MCTS algorithm with DQN guidance on tree search
-# > Uses the subtree statistics of the selected action for the MCTS procedure of the next step
-# > Implements batch inference for faster action selection
-# > Uses the current state information to avoid expensive deepcopy of the environment
-# ----------------------------------------------------------------------------------------------------------------
+"""
+----------------------------------------------------------------------------------------------------
+MCTS_Q: Monte Carlo Tree Search with Deep-Q-Network
+GitHub Repository: https://github.com/SimMarkt/MCTS_Q
+
+mctsq_config_mcts_per: 
+> Incorporates the MCTS algorithm with DQN guidance on tree search
+> Uses the subtree statistics of the selected action for the MCTS procedure of the next step
+> Implements batch inference for faster action selection
+> Uses the current state information to avoid expensive deepcopy of the environment
+----------------------------------------------------------------------------------------------------
+"""
 
 import math
 import random

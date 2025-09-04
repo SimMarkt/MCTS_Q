@@ -1,10 +1,12 @@
-# ----------------------------------------------------------------------------------------------------------------
-# MCTS_Q: Monte Carlo Tree Search with Deep-Q-Network
-# GitHub Repository: https://github.com/SimMarkt/MCTS_Q
-#
-# mctsq_config_env: 
-# > Contains the configuration for the Power-to-Gas (PtG) process environment
-# ----------------------------------------------------------------------------------------------------------------
+"""
+----------------------------------------------------------------------------------------------------
+MCTS_Q: Monte Carlo Tree Search with Deep-Q-Network
+GitHub Repository: https://github.com/SimMarkt/MCTS_Q
+
+mctsq_config_env: 
+> Contains the configuration for the Power-to-Gas (PtG) process environment
+----------------------------------------------------------------------------------------------------
+"""
 
 import yaml
 

@@ -1,11 +1,13 @@
-# ----------------------------------------------------------------------------------------------------------------
-# MCTS_Q: Monte Carlo Tree Search with Deep-Q-Network
-# GitHub Repository: https://github.com/SimMarkt/MCTS_Q
-#
-# mctsq_config_dqn: 
-# > Provides the Deep Q-Network model including different encoders for energy market and process data
-# > Implements a prioritized replay buffer for experience replay
-# ----------------------------------------------------------------------------------------------------------------
+"""
+----------------------------------------------------------------------------------------------------
+MCTS_Q: Monte Carlo Tree Search with Deep-Q-Network
+GitHub Repository: https://github.com/SimMarkt/MCTS_Q
+
+mctsq_config_dqn: 
+> Provides the Deep Q-Network model including different encoders for energy market and process data
+> Implements a prioritized replay buffer for experience replay
+----------------------------------------------------------------------------------------------------
+"""
 
 import torch
 import torch.nn as nn

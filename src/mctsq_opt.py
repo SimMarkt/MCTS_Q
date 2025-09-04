@@ -1,22 +1,26 @@
-# ----------------------------------------------------------------------------------------------------------------
-# MCTS_Q: Monte Carlo Tree Search with Deep-Q-Network
-# GitHub Repository: https://github.com/SimMarkt/MCTS_Q
-#
-# mctsq_opt: 
-# > Computes the potential rewards, the load identifiers, and the theoretical optimum T-OPT ignoring plant dynamics.
-# ----------------------------------------------------------------------------------------------------------------
+"""
+----------------------------------------------------------------------------------------------------
+MCTS_Q: Monte Carlo Tree Search with Deep-Q-Network
+GitHub Repository: https://github.com/SimMarkt/MCTS_Q
 
-# Abbreviations:
-#   SNG: Synthetic natural gas
-#   EUA: European emission allowances
-#   CHP: Combined heat and power plant
-#   CH4: Methane
-#   H2: Hydrogen
-#   O2: Oxygen
-#   CO2: Carbon dioxide
-#   H2O_DE: Water vapor (steam)
-#   LHV: Lower heating value
-#   EEG: German Renewable Energy Act (Erneuerbare-Energien-Gesetz)
+mctsq_opt: 
+> Computes the potential rewards, the load identifiers, and the theoretical 
+  optimum T-OPT ignoring plant dynamics.
+
+Abbreviations:
+   SNG: Synthetic natural gas
+   EUA: European emission allowances
+   CHP: Combined heat and power plant
+   CH4: Methane
+   H2: Hydrogen
+   O2: Oxygen
+   CO2: Carbon dioxide
+   H2O_DE: Water vapor (steam)
+   LHV: Lower heating value
+   EEG: German Renewable Energy Act (Erneuerbare-Energien-Gesetz)
+
+----------------------------------------------------------------------------------------------------
+"""
 
 import numpy as np
 import math

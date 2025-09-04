@@ -5,11 +5,13 @@ GitHub Repository: https://github.com/SimMarkt/MCTS_Q
 
 mctsq_main:
 > Main script for training the MCTS_Q algorithm on the PtG-CH4 dispatch task.
-> Adapts to different computational environments: a local personal computer ('pc') or a computing cluster with SLURM management ('slurm').
+> Adapts to different computational environments: 
+        - a local personal computer ('pc') or 
+        - a computing cluster with SLURM management ('slurm').
 ----------------------------------------------------------------------------------------------------
 """
 
-# --------------------------------------------Import Python libraries---------------------------------------------
+# -------------------------------------Import Python libraries--------------------------------------
 import os
 import torch as th
 
@@ -125,6 +127,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-
-

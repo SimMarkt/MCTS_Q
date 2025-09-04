@@ -71,7 +71,7 @@ def check_env(env_id):
         print(f"---Environment '{env_id}' is already registered.\n")
 
 def main():
-    # -------------------------------Initialize the configurations and the model----------------------------------
+    # ------------------------Initialize the configurations and the model---------------------------
     initial_print()
     EnvConfig = EnvConfiguration()
     TrainConfig = TrainConfiguration()

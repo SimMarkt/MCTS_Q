@@ -1,5 +1,5 @@
 """
-----------------------------------------------------------------------------------------------------------------
+----------------------------------------------------------------------------------------------------
 MCTS_Q: Monte Carlo Tree Search with Deep-Q-Network
 GitHub Repository: https://github.com/SimMarkt/MCTS_Q
 
@@ -9,7 +9,7 @@ mctsq_main_per:
 > Includes modifications to improve training speed:
            - Incorporates ptg_gym_env_per.py which requires the current state index (to avoid expensive deepcopy of the environment in MCTS)
            - Accelerates inference using jit based compiling of the DQN model and batch inference
-----------------------------------------------------------------------------------------------------------------
+----------------------------------------------------------------------------------------------------
 """
 
 # --------------------------------------------Import Python libraries---------------------------------------------

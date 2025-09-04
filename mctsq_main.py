@@ -1,12 +1,12 @@
 """
-# ----------------------------------------------------------------------------------------------------------------
+----------------------------------------------------------------------------------------------------
 # MCTS_Q: Monte Carlo Tree Search with Deep-Q-Network
 # GitHub Repository: https://github.com/SimMarkt/MCTS_Q
 #
 # mctsq_main:
 # > Main script for training the MCTS_Q algorithm on the PtG-CH4 dispatch task.
 # > Adapts to different computational environments: a local personal computer ('pc') or a computing cluster with SLURM management ('slurm').
-# ----------------------------------------------------------------------------------------------------------------
+----------------------------------------------------------------------------------------------------
 """
 
 # --------------------------------------------Import Python libraries---------------------------------------------

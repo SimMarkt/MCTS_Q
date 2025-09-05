@@ -23,7 +23,6 @@ Optional modifications: Include temporal encoding in the observation space
 # pylint: disable=no-member, global-statement, attribute-defined-outside-init
 
 import math
-import copy
 from typing import Any
 
 import gymnasium as gym
@@ -38,7 +37,12 @@ class PTGEnv(gym.Env):
 
     metadata = {"render_modes": ["None"]}
 
-    def __init__(self, dict_input, train_or_eval = "train", render_mode="None"):
+    def __init__(
+            self,
+            dict_input: dict[str, Any],
+            train_or_eval: str = "train",
+            render_mode: str = "None"
+        ) -> None:
         """
             Initialize the PtG environment for training or evaluation
             :param dict_input: Dictionary containing energy market data, process data,
@@ -96,7 +100,7 @@ class PTGEnv(gym.Env):
 
         self.render_mode = render_mode
 
-    def _initialize_datasets(self):
+    def _initialize_datasets(self) -> None:
         """Initialize data sets and temporal encoding"""
         # self.e_r_b: np.array that stores elec. price data, potential reward,
         #             and boolean identifier
@@ -129,7 +133,7 @@ class PTGEnv(gym.Env):
         # self.temp_h_enc_sin = math.sin(2 * math.pi * self.clock_hours)
         # self.temp_h_enc_cos = math.cos(2 * math.pi * self.clock_hours)
 
-    def _initialize_op_rew(self):
+    def _initialize_op_rew(self) -> None:
         """Initialize methanation operation and reward constituents"""
         # Methanation operation
         self.meth_state = self.m_state['cooldown']
@@ -191,7 +195,7 @@ class PTGEnv(gym.Env):
         self.info = {}                      # Info for evaluation
         self.k = 0                          # Step counter
 
-    def _initialize_action_space(self):
+    def _initialize_action_space(self) -> None:
         """Initialize the action space for plant operations""" 
         self.actions = ['standby', 'cooldown', 'startup', 'partial_load', 'full_load']
         self.current_action = 'cooldown'                    # Aligned with the real-world plant
@@ -215,7 +219,7 @@ class PTGEnv(gym.Env):
             assert False, (f"ptg_gym_env.py error: invalid action type ({self.action_type}) - "
                            "must match ['discrete', 'continuous']!")
 
-    def _initialize_observation_space(self):
+    def _initialize_observation_space(self) -> None:
         """Define observation space"""
         b_norm = [0, 1]     # Normalized lower and upper bounds [low, up]
 
@@ -275,7 +279,7 @@ class PTGEnv(gym.Env):
             }
         )
 
-    def _normalize_observations(self):
+    def _normalize_observations(self) -> None:
         """Normalize observations using standardization"""
 
         self.el_n = (self.e_r_b_act[0, :] - self.el_l_b) / (self.el_u_b - self.el_l_b)
@@ -292,7 +296,7 @@ class PTGEnv(gym.Env):
         self.meth_el_heating_n = ((self.meth_el_heating_seq - self.heat_l_b) /
                                   (self.heat_u_b - self.heat_l_b))
 
-    def get_obs(self):
+    def get_obs(self) -> dict[str, Any]:
         """Retrieve the current observations from the environment"""
         return {
             "Elec_Price": np.array(self.el_n, dtype=np.float64),
@@ -306,7 +310,7 @@ class PTGEnv(gym.Env):
             "Elec_Heating": np.array(self.meth_el_heating_n, dtype=np.float64),
         }
 
-    def _get_info(self, state_c):
+    def _get_info(self, state_c) -> dict[str, Any]:
         """Retrieve additional details or metadata about the environment"""
         return {
             "step": self.k,
@@ -336,7 +340,7 @@ class PTGEnv(gym.Env):
             "state_c": state_c,
         }
 
-    def _get_reward(self):
+    def _get_reward(self) -> float:
         """Calculate the reward based on the current revenues and costs"""
 
         # Gas revenues (Scenario 1+2):          If Scenario == 3: self.gas_price_h[0] = 0
@@ -416,7 +420,7 @@ class PTGEnv(gym.Env):
 
         return rew_norm
 
-    def step(self, act_state_c):
+    def step(self, act_state_c) -> tuple[dict[str, Any], float, bool, bool, dict[str, Any]]:
         """ 
         Execute one time step within the environment
         :param act_state_c: Tuple containing the action and the state index
@@ -652,7 +656,7 @@ class PTGEnv(gym.Env):
         }
 
         if self.train_or_eval == "train":
-            info = self._get_info(state_c)
+            info = {}
         else:
             info = self._get_info(state_c)
 
@@ -661,7 +665,11 @@ class PTGEnv(gym.Env):
 
         return observation, reward, terminated, False, info
 
-    def reset(self, seed=None, options=None):
+    def reset(                                          # pylint: disable=arguments-differ
+            self,
+            seed: int | None = None,
+            options=None                                # pylint: disable=unused-argument
+        ) -> tuple[dict[str, Any], dict[str, Any]]:
         """Reset the environment"""
         super().reset(seed=seed)    # Reset the random seed
 
@@ -700,7 +708,7 @@ class PTGEnv(gym.Env):
 
         return observation, info
 
-    def _is_terminated(self):
+    def _is_terminated(self) -> bool:
         """Returns whether the episode terminates"""
         if self.k == self.eps_sim_steps - 6:
             return True     # Curtails training to ensure and data overhead (-6)
@@ -708,7 +716,7 @@ class PTGEnv(gym.Env):
             return False
 
     # --------- Utility/Helper Functions for Predicting Process Dynamics and State Changes ---------
-    def _get_index(self, operation, t_cat):
+    def _get_index(self, operation: np.ndarray, t_cat: float) -> int:
         """
             Determine the position (index) in the operation data set based on
             the catalyst temperature
@@ -768,7 +776,14 @@ class PTGEnv(gym.Env):
                 op_range = np.ones((self.step_size, operation.shape[1])) * operation[-1, :]
         return op_range, r_state, idx, j
 
-    def _cont(self, operation, initial_state, next_operation, next_state, change_operation):
+    def _cont(
+            self,
+            operation: np.ndarray,
+            initial_state: Any,
+            next_operation: np.ndarray,
+            next_state: Any,
+            change_operation: bool
+        ) -> tuple[np.ndarray, Any, int, int]:
         """
             Perform a single simulation step in the current methanation state operation.
             :param operation: np.array of operation modes for each timestep
@@ -783,7 +798,7 @@ class PTGEnv(gym.Env):
         return self._perform_sim_step(operation, initial_state, next_operation, next_state,
                                       self.i, self.j, change_operation)
 
-    def _standby(self):
+    def _standby(self) -> tuple[np.ndarray, Any, int, int]:
         """
             Transition the system to the 'Standby' methanation state and perform a simulation step
             :return: op_range: Operation range; r_state: Methanation state; idx; j
@@ -804,7 +819,7 @@ class PTGEnv(gym.Env):
         return self._perform_sim_step(self.standby, self.meth_state, self.standby, self.meth_state,
                                       self.i, self.j, False)
 
-    def _cooldown(self):
+    def _cooldown(self) -> tuple[np.ndarray, Any, int, int]:
         """
             Transition the system to the 'Cooldown' methanation state and perform a simulation step
             :return: op_range: Operation range; r_state: Methanation state; idx; j
@@ -818,7 +833,7 @@ class PTGEnv(gym.Env):
         return self._perform_sim_step(self.cooldown, self.meth_state, self.cooldown,
                                       self.meth_state, self.i, self.j, False)
 
-    def _startup(self):
+    def _startup(self) -> tuple[np.ndarray, Any, int, int]:
         """
             Transition the system to the 'Startup' methanation state and perform a simulation step
             :return: op_range: Operation range; r_state: Methanation state; idx; j
@@ -842,7 +857,7 @@ class PTGEnv(gym.Env):
         return self._perform_sim_step(self.startup, self.meth_state, self.partial,
                                       self.m_state['partial_load'], self.i, self.j, True)
 
-    def _partial(self):
+    def _partial(self) -> tuple[np.ndarray, Any, int, int]:
         """
             Transition the system to the 'Partial load' state and perform a simulation step,
             dependent on prior full-load conditions.
@@ -911,7 +926,7 @@ class PTGEnv(gym.Env):
         return self._perform_sim_step(self.partial, self.meth_state, self.partial,
                                       self.m_state['partial_load'], self.i, self.j, False)
 
-    def _full(self):
+    def _full(self) -> tuple[np.ndarray, Any, int, int]:
         """
             Transition the system to the 'Full load' state and perform a simulation step,
             dependent on prior partial-load conditions.
@@ -980,30 +995,6 @@ class PTGEnv(gym.Env):
         return self._perform_sim_step(self.full, self.meth_state, self.full,
                                       self.m_state['full_load'], self.i, self.j, False)
 
-    def __deepcopy__(self, memo):
-        """
-            Custom deepcopy to avoid copying large static arrays.
-        """
-        cls = self.__class__
-        result = cls.__new__(cls)
-        memo[id(self)] = result
-
-        # List of large static arrays to reference, not copy
-        static_arrays = [
-            'e_r_b', 'g_e',
-            'startup_cold', 'startup_hot', 'cooldown',
-            'standby_down', 'standby_up',
-            'op1_start_p', 'op2_start_f', 'op3_p_f',
-            'op4_p_f_p_5', 'op5_p_f_p_10', 'op6_p_f_p_15', 'op7_p_f_p_20',
-            'op8_f_p', 'op9_f_p_f_5', 'op10_f_p_f_10', 'op11_f_p_f_15', 'op12_f_p_f_20'
-        ]
-
-        for k, v in self.__dict__.items():
-            # Debug: print attribute name and shape if it's a numpy array
-            # if isinstance(v, np.ndarray):
-            #     print(f"Deepcopy: {k}, shape: {v.shape}, dtype: {v.dtype}")
-            if k in static_arrays:
-                setattr(result, k, v)
-            else:
-                setattr(result, k, copy.deepcopy(v, memo))
-        return result
+    def render(self, mode: str = "human") -> None: # pylint: disable=unused-argument
+        """Optional: No rendering needed for this env"""
+        return None

@@ -11,6 +11,7 @@ mctsq_config_mcts:
 
 # pylint: disable=no-member
 
+from __future__ import annotations
 import math
 import random
 import copy
@@ -26,7 +27,6 @@ from tqdm import tqdm
 import gymnasium as gym
 
 from src.mctsq_config_dqn import DQNModel
-from src.mctsq_utils import CallbackVal
 from src.mctsq_config_env import EnvConfiguration
 
 class MCTSQ:
@@ -35,7 +35,7 @@ class MCTSQ:
             self,
             env: gym.Env,
             seed: int,
-            config: "MCTSQConfiguration" | None = None,
+            config: MCTSQConfiguration | None = None,
             tb_log: str | None = None
         ) -> None:
         """
@@ -100,7 +100,7 @@ class MCTSQ:
 
         self.deterministic = False
 
-    def learn(self, total_timesteps: int, callback: CallbackVal) -> None:
+    def learn(self, total_timesteps: int, callback: Any) -> None:
         """
         Learn MCTS_Q parameters.
         :param total_timesteps: Total number of timesteps for training
@@ -409,7 +409,7 @@ class MCTSNode:
         Get the legal actions for the current node based on the environment's action space
         :return: List of legal actions
         """
-        meth_state = self.env.Meth_State  # Access the Meth_State from the environment
+        meth_state = self.env.meth_state  # Access the Meth_State from the environment
         if meth_state == 0:     # 'standby'
             # Allows only standby, cooldown, and startup actions
             return [0, 1, 2]

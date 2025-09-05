@@ -166,14 +166,14 @@ class PTGEnv(gym.Env):
         self.i = self._get_index(self.cooldown, self.meth_t_cat) # Index for operation
         self.j = 0                                               # Step counter for operation
         self.op = self.cooldown[self.i, :]                       # Current operation point
-        keys = ['H2_flow', 'CH4_flow', 'H2_res_flow', 'H2O_flow', 'el_heating']
+        keys = ['h2_flow', 'ch4_flow', 'h2_res_flow', 'h2o_flow', 'el_heating']
         for i, key in enumerate(keys, start=2):
-            setattr(self, f'Meth_{key}', self.op[i])
-        keys = ['T_cat', 'H2_flow', 'CH4_flow', 'H2_res_flow', 'H2O_flow', 'el_heating']
+            setattr(self, f'meth_{key}', self.op[i])
+        keys = ['t_cat', 'h2_flow', 'ch4_flow', 'h2_res_flow', 'h2o_flow', 'el_heating']
         # Broadcasts vector across rows
         self.op_seq = np.ones((self.seq_length, len(keys)+1)) * self.op
         for i, key in enumerate(keys, start=1):
-            setattr(self, f'Meth_{key}_seq', self.op_seq[:, i])
+            setattr(self, f'meth_{key}_seq', self.op_seq[:, i])
         self.hot_cold = 0                   # Detect startup conditions (0=cold, 1=hot)
         self.state_change = False           # Track changes in methanation state Meth_State
         self.r_0 = self.reward_level[0]     # Reward level
@@ -419,7 +419,7 @@ class PTGEnv(gym.Env):
 
         return rew_norm
 
-    def step(self, act_state_c) -> tuple[dict[str, Any], float, bool, bool, dict[str, Any]]:
+    def step(self, act_state_c: Any) -> tuple[dict[str, Any], float, bool, bool, dict[str, Any]]:
         """ 
         Execute one time step within the environment
         :param act_state_c: Tuple containing the action and the state index
@@ -654,10 +654,7 @@ class PTGEnv(gym.Env):
             'obs_norm': observation,
         }
 
-        if self.train_or_eval == "train":
-            info = {}
-        else:
-            info = self._get_info(state_c)
+        info = self._get_info(state_c)
 
         # PtGEnv uses only "terminated" because preliminary studies showed no performance difference
         # between using "terminated" and "truncated" episodes.

@@ -12,14 +12,16 @@ mctsq_config_mcts:
 import math
 import random
 import copy
+import gc
+
 import yaml
 import numpy as np
 import torch
 import torch.nn.functional as F
-import gc
 from torch.utils.tensorboard import SummaryWriter
-from src.mctsq_config_dqn import DQNModel
 from tqdm import tqdm
+
+from src.mctsq_config_dqn import DQNModel
 
 class MCTS_Q:
     def __init__(self, env, seed, config=None, tb_log=None):
@@ -33,7 +35,7 @@ class MCTS_Q:
         if config is not None:
             self.__dict__.update(config.__dict__)
         else:
-            with open("config/config_mctsq.yaml", "r") as env_file:
+            with open("config/config_mctsq.yaml", "r", encoding="utf-8") as env_file:
                 mctsq_config = yaml.safe_load(env_file)
             self.__dict__.update(mctsq_config)
 

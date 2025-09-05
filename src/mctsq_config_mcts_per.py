@@ -33,7 +33,7 @@ class MCTS_Q:
         if config is not None:
             self.__dict__.update(config.__dict__)
         else:
-            with open("config/config_mctsq.yaml", "r") as mctsq_file:
+            with open("config/config_mctsq.yaml", "r", encoding="utf-8") as mctsq_file:
                 mctsq_config = yaml.safe_load(mctsq_file)
             self.__dict__.update(mctsq_config)
 

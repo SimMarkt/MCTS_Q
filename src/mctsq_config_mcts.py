@@ -9,6 +9,8 @@ mctsq_config_mcts:
 ----------------------------------------------------------------------------------------------------
 """
 
+# pylint: disable=no-member
+
 import math
 import random
 import copy
@@ -24,6 +26,7 @@ from tqdm import tqdm
 from src.mctsq_config_dqn import DQNModel
 
 class MCTS_Q:
+    """ MCTS_Q algorithm with DQN guidance."""
     def __init__(self, env, seed, config=None, tb_log=None):
         """
         Initialize MCTS_Q with the training environment and DQN agent.
@@ -40,29 +43,33 @@ class MCTS_Q:
             self.__dict__.update(mctsq_config)
 
         self.env = env
+        self.step = None
 
         self.tb_log = tb_log
         self.writer = None
         if self.tb_log is not None:
             self.writer = SummaryWriter(log_dir=self.tb_log)
 
-        # Load the environment configuration from the YAML file
-        with open("config/config_env.yaml", "r") as env_file:
-            env_config = yaml.safe_load(env_file)
+        self.eval_processes = []
 
-        el_input_dim = 1                        # "Elec_Price" in ptg_gym_env observation space
-        process_input_dim = 6                   # "T_CAT", "H2_in_MolarFlow", "CH4_syn_MolarFlow", "H2_res_MolarFlow", "H2O_DE_MassFlow", "Elec_Heating"
-        gas_eua_input_dim = 2                   # "Gas_Price", "EUA_Price"
-        temporal_encodings = 2                  # Temporal encoding with two additional features (sin/cos)
+        # "Elec_Price" in ptg_gym_env observation space
+        el_input_dim = 1
+        # "T_CAT", "H2_in_MolarFlow", "CH4_syn_MolarFlow", "H2_res_MolarFlow",
+        # "H2O_DE_MassFlow", "Elec_Heating"
+        process_input_dim = 6
+        # "Gas_Price", "EUA_Price"
+        gas_eua_input_dim = 2
+        # Temporal encoding with two additional features (sin/cos)
+        temporal_encodings = 2
 
         # Initialize the DQN model
         action_dim = env.action_space.n
 
         self.dqn = DQNModel(
-            el_input_dim=el_input_dim+temporal_encodings, 
-            process_input_dim=process_input_dim+temporal_encodings, 
-            gas_eua_input_dim=gas_eua_input_dim+temporal_encodings, 
-            action_dim=action_dim, 
+            el_input_dim=el_input_dim+temporal_encodings,
+            process_input_dim=process_input_dim+temporal_encodings,
+            gas_eua_input_dim=gas_eua_input_dim+temporal_encodings,
+            action_dim=action_dim,
             embed_dim=self.embed_dim,
             hidden_layers=self.hidden_layers,
             hidden_units=self.hidden_units,
@@ -81,7 +88,6 @@ class MCTS_Q:
         self.action_type = "discrete"
 
         self.deterministic = False
-         
 
     def learn(self, total_timesteps, callback):
         """
@@ -90,9 +96,7 @@ class MCTS_Q:
         :param callback: Callback function for evaluation
         """
 
-        state, _ = self.env.reset()      
-
-        self.eval_processes = []
+        state, _ = self.env.reset()
 
         # for self.step in tqdm(range(total_timesteps), desc="Training MCTS_Q", unit="step"):
         for self.step in range(total_timesteps):
@@ -113,17 +117,21 @@ class MCTS_Q:
 
             if self.step % self.target_update == 0 and self.step != 0:
                 self.dqn.update_target_network()
-            
+
             # Evaluate the policy (In Serial processing)
             if callback is not None:
                 if self.step % callback.val_steps == 0 and self.step != 0:
-                    state_call, _ = callback.env.reset()
-                    cum_reward_call = 0 
+                    _, _ = callback.env.reset()
+                    cum_reward_call = 0
 
-                    # for _ in tqdm(range(callback.env.eps_sim_steps), desc="Validation MCTS_Q", unit="step"):
+                    # for _ in tqdm(
+                    #   range(callback.env.eps_sim_steps),
+                    #   desc="Validation MCTS_Q",
+                    #   unit="step"
+                    # ):
                     for _ in range(callback.env.eps_sim_steps):
                         action_call = self.predict(callback.env)
-                        _, _, terminated_call, _, info = callback.env.step(action_call)
+                        _, _, terminated_call, _, _ = callback.env.step(action_call)
 
                         if terminated_call:
                             break
@@ -131,7 +139,11 @@ class MCTS_Q:
                     print(f"   >>Step: {self.step} - Cumulative Reward: {cum_reward_call}")
 
                     if self.writer is not None:
-                        self.writer.add_scalar("Validation/CumulativeReward", cum_reward_call, global_step=self.step)
+                        self.writer.add_scalar(
+                            "Validation/CumulativeReward",
+                            cum_reward_call,
+                            global_step=self.step
+                        )
 
         if self.writer is not None:
             self.writer.close()
@@ -143,7 +155,6 @@ class MCTS_Q:
         """
         self.deterministic = deterministic
         root_env_copy = copy.deepcopy(env)
-
 
         root_node = MCTSNode(root_env_copy, maximum_depth=self.maximum_depth)
 
@@ -161,7 +172,7 @@ class MCTS_Q:
         gc.collect()
 
         return best_action
-    
+
     def _select(self, node):
         """
         Select the best child node based on PUCT (Upper Confidence Bound for Trees).
@@ -180,8 +191,8 @@ class MCTS_Q:
             # Serial inference
             for child in node.children:
                 # Use the DQN model's Q-values for the prior policy
-
-                price_state, process_state, gas_eua_state = self._get_state(child.env)  # Get the state representation
+                # First get the state representation
+                price_state, process_state, gas_eua_state = self._get_state(child.env)
 
                 with torch.no_grad():
                     q_values = self.dqn.policy_net(price_state, process_state, gas_eua_state)
@@ -192,14 +203,17 @@ class MCTS_Q:
 
                 # Compute PUCT score
                 child.puct_score = (
-                    mean_q_value + c_puct * prior_prob * math.sqrt(total_visits) / (1 + child.visits)
+                    mean_q_value +
+                    c_puct *
+                    prior_prob *
+                    math.sqrt(total_visits) / (1 + child.visits)
                 )
 
             # Select the child with the highest PUCT score
             node = max(node.children, key=lambda child: child.puct_score)
 
         return node
-    
+
     def _expand(self, node):
         """
         Expand the node by adding a new child node.
@@ -223,17 +237,19 @@ class MCTS_Q:
         )
         node.children.append(child_node)
         return child_node
-    
+
     def _evaluate(self, node):
         """
         Use the DQN model's value function to estimate the value of a leaf node.
         :param node: The leaf node to evaluate
         :return: The expected value of Q-values for the node
         """
-        price_state, process_state, gas_eua_state = self._get_state(node.env)  # Get the state representation
+        # Get the state representation
+        price_state, process_state, gas_eua_state = self._get_state(node.env)
 
         with torch.no_grad():
-            q_values = self.dqn.policy_net(price_state, process_state, gas_eua_state)  # Get Q-values from the DQN
+            # Get Q-values from the DQN
+            q_values = self.dqn.policy_net(price_state, process_state, gas_eua_state)
         return q_values.max().item()  # Use the maximum Q-value as the value estimate
 
     def _backpropagate(self, node, value):
@@ -288,13 +304,13 @@ class MCTS_Q:
         """
         self.dqn.load(filepath)
 
-    def test(self, EnvConfig, eps_sim_steps_test):
+    def test(self, env_config, eps_sim_steps_test):
         """
             Test MCTS_Q on the test environment
         """
         _, _ = self.env.reset()  
 
-        stats = np.zeros((eps_sim_steps_test, len(EnvConfig.stats_names)))    
+        stats = np.zeros((eps_sim_steps_test, len(env_config.stats_names)))    
         stats_dict_test={}
 
         # for i in tqdm(range(eps_sim_steps_test), desc="Testing MCTS_Q", unit="step"):
@@ -326,8 +342,8 @@ class MCTS_Q:
                     j += 1
 
             
-        for m in range(len(EnvConfig.stats_names)):
-            stats_dict_test[EnvConfig.stats_names[m]] = stats[:(eps_sim_steps_test), m]
+        for m in range(len(env_config.stats_names)):
+            stats_dict_test[env_config.stats_names[m]] = stats[:(eps_sim_steps_test), m]
 
         print(f"   >>Cumulative Reward {info['cum_reward']}")
         

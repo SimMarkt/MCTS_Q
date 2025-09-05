@@ -28,7 +28,7 @@ from src.mctsq_utils import load_data, initial_print, config_print, create_envs,
 from src.mctsq_utils import Preprocessing
 from src.mctsq_config_env import EnvConfiguration
 from src.mctsq_config_train import TrainConfiguration
-from src.mctsq_config_mcts_per import MCTSQConfiguration, MCTS_Q
+from src.mctsq_config_mcts_per import MCTSQConfiguration, MCTSQ
 
 def computational_resources(train_config: TrainConfiguration) -> None:
     """
@@ -118,7 +118,7 @@ def main() -> None:
     # ------------------------------------Initialize MCTS_Q-----------------------------------------
     print("Initialize MCTS_Q agent...")
     if train_config.model_conf != "test_model":
-        model = MCTS_Q(
+        model = MCTSQ(
             env_train,
             seed=train_config.seed_train,
             config=mctsq_config,
@@ -143,7 +143,7 @@ def main() -> None:
     if train_config.model_conf != "simple_train":
         print("Postprocessing...")
         # Initialize MCTS_Q for the test environment and load pretrained model parameters
-        model_test = MCTS_Q(env_test_post, seed=train_config.seed_train, config=mctsq_config)
+        model_test = MCTSQ(env_test_post, seed=train_config.seed_train, config=mctsq_config)
         model_test.load(train_config.log_path + str_id)
         stats_dict_test = model_test.test(env_config, preprocess.eps_sim_steps_test)
 

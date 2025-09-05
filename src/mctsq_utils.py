@@ -462,7 +462,7 @@ def create_envs(env_id, env_kwargs_data, TrainConfig):
 
     return env_train, callback_val, env_test_post
        
-def plot_results(EnvConfig, stats_dict_test, str_id):
+def plot_results(env_config, stats_dict_test, str_id):
     """Generates a multi-subplot plot displaying time-series data and methanation operations based on the agent's actions"""
     print("---Plot and save RL performance on the test set under ./plots/ ...\n") 
 

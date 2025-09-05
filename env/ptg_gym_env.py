@@ -35,7 +35,6 @@ ep_index = 0    # pylint: disable=invalid-name
 
 class PTGEnv(gym.Env):
     """Custom Environment implementing the Gymnasium interface for PtG dispatch optimization."""
-
     metadata = {"render_modes": ["None"]}
 
     def __init__(

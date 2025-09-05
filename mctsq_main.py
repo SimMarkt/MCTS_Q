@@ -17,9 +17,7 @@ mctsq_main:
 import os
 
 import torch as th
-
-# Library for the RL environment
-from gymnasium.envs.registration import registry, register
+from gymnasium.envs.registration import registry, register  # Library for the RL environment
 
 # Libraries with utility functions and classes
 from src.mctsq_utils import load_data, initial_print, config_print, create_envs, plot_results

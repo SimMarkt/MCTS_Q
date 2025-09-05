@@ -1,11 +1,11 @@
-# --------------------------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------------------
 # MCTS_Q: Monte Carlo Tree Search with Deep-Q-Network
 # GitHub Repository: https://github.com/SimMarkt/MCTS_Q
 #
 # config_mcts:
 # > Configuration file for the MTCS in the PtG-CH4 environment
 # > The algorithm uses Upper Confidence Bound for Trees (UCT) to balance exploration and exploitation
-# --------------------------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------------------
 
 # MCTS hyperparameters
 iterations : 50             # No. of iterations for MCTS

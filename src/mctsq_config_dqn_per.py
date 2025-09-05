@@ -206,7 +206,7 @@ class TripleEncoderDQN(nn.Module):
         fc_layers = []
         input_dim = embed_dim * 3
         act = get_activation(activation)
-        for i in range(hidden_layers):
+        for _ in range(hidden_layers):
             fc_layers.append(nn.Linear(int(input_dim), int(hidden_units)))
             fc_layers.append(act)
             input_dim = hidden_units

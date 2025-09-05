@@ -13,6 +13,7 @@ mctsq_config_mcts_per:
 
 # pylint: disable=no-member
 
+from __future__ import annotations
 import math
 import random
 from typing import Any
@@ -35,7 +36,7 @@ class MCTSQ:
             self,
             env: gym.Env,
             seed: int,
-            config: "MCTSQConfiguration" | None = None,
+            config: MCTSQConfiguration | None = None,
             log_path: str | None = None,
             tb_log: str | None = None
         ) -> None:
@@ -106,12 +107,6 @@ class MCTSQ:
             gas_eua_encoder_type=self.gas_eua_encoder_type,
             activation=self.activation,
             learning_starts=self.learning_starts,
-            seq_len_price=seq_len_price,
-            seq_len_process=self.seq_length,
-            seq_len_gas_eua=seq_len_gas_eua,
-            price_step_minutes=price_step_minutes,
-            process_step_minutes=process_step_minutes,
-            gas_eua_step_minutes=gas_eua_step_minutes,
             seed=seed
         )
 

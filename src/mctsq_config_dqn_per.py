@@ -10,6 +10,7 @@ mctsq_config_dqn_per:
 """
 import random
 from collections import deque
+from typing import Any
 
 import torch
 import torch.nn as nn
@@ -19,7 +20,7 @@ import numpy as np
 # --- ConvAttentionEnc ---
 class ConvAttentionEnc(nn.Module):
     """Convolutional Neural Network with Attention Mechanism for Encoding Time-Series Data."""
-    def __init__(self, input_dim, embed_dim):
+    def __init__(self, input_dim: int, embed_dim: int) -> None:
         super(ConvAttentionEnc, self).__init__()
         self.conv1 = nn.Conv1d(
             in_channels=input_dim,
@@ -35,7 +36,7 @@ class ConvAttentionEnc(nn.Module):
         self.attention_weights = nn.Conv1d(in_channels=embed_dim, out_channels=1, kernel_size=1)
         self.norm = nn.LayerNorm(embed_dim)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         """ 
         Forward pass through the ConvAttentionEnc.
         :param x: Input tensor of shape (batch_size, seq_length, input_dim)
@@ -56,13 +57,13 @@ class ConvAttentionEnc(nn.Module):
 # --- GRUAttentionEnc ---
 class GRUAttentionEnc(nn.Module):
     """GRU-based Encoder with Attention Mechanism for Time-Series Data."""
-    def __init__(self, input_dim, embed_dim):
+    def __init__(self, input_dim: int, embed_dim: int) -> None:
         super(GRUAttentionEnc, self).__init__()
         self.gru = nn.GRU(input_dim, embed_dim, batch_first=True)
         self.attention_weights = nn.Linear(embed_dim, 1)
         self.norm = nn.LayerNorm(embed_dim)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Forward pass through the GRUAttentionEnc.
         :param x: Input tensor of shape (batch_size, seq_length, input_dim)
@@ -78,7 +79,7 @@ class GRUAttentionEnc(nn.Module):
 # --- TransformerEnc ---
 class TransformerEnc(nn.Module):
     """Transformer Encoder for Time-Series Data."""
-    def __init__(self, input_dim, embed_dim, num_heads, num_layers):
+    def __init__(self, input_dim: int, embed_dim: int, num_heads: int, num_layers: int) -> None:
         super(TransformerEnc, self).__init__()
         self.embedding = nn.Linear(input_dim, embed_dim)
         self.positional_encoding = nn.Parameter(torch.zeros(1, 500, embed_dim))
@@ -86,7 +87,7 @@ class TransformerEnc(nn.Module):
         self.transformer = nn.TransformerEncoder(encoder_layer, num_layers)
         self.norm = nn.LayerNorm(embed_dim)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Forward pass through the TransformerEnc.
         :param x: Input tensor of shape (batch_size, seq_length, input_dim)
@@ -102,7 +103,7 @@ class TransformerEnc(nn.Module):
 # --- GasEUAEncoder ---
 class GasEUAEncoder(nn.Module):
     """Encoder for Gas and EUA Data, supporting MLP or GRU-based architectures."""
-    def __init__(self, input_dim, embed_dim, encoder_type="mlp"):
+    def __init__(self, input_dim: int, embed_dim: int, encoder_type: str = "mlp") -> None:
         super(GasEUAEncoder, self).__init__()
         if encoder_type == "mlp":
             self.encoder = nn.Sequential(
@@ -118,7 +119,7 @@ class GasEUAEncoder(nn.Module):
         else:
             raise ValueError("Invalid gas/EUA encoder type.")
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Forward pass through the GasEUAEncoder.
         :param x: Input tensor of shape (batch_size, seq_length, input_dim)
@@ -128,7 +129,7 @@ class GasEUAEncoder(nn.Module):
             x = x.view(x.size(0), -1)
         return self.encoder(x)
 
-def get_activation(activation_name):
+def get_activation(activation_name: str) -> nn.Module:
     """
     Returns the activation function based on the provided name in config.mctsq.yaml.
     :param activation_name: Name of the activation function (e.g., "relu", "tanh")
@@ -148,11 +149,18 @@ class TripleEncoderDQN(nn.Module):
     """
     def __init__(
             self,
-            el_input_dim, process_input_dim, gas_eua_input_dim,  
-            embed_dim, hidden_layers, hidden_units, action_dim,
-            price_encoder_type="conv", process_encoder_type="gru", gas_eua_encoder_type="mlp",
-            activation="relu"
-        ):
+            el_input_dim: int,
+            process_input_dim: int,
+            gas_eua_input_dim: int,
+            embed_dim: int,
+            hidden_layers: int,
+            hidden_units: int,
+            action_dim: int,
+            price_encoder_type: str = "conv",
+            process_encoder_type: str = "gru",
+            gas_eua_encoder_type: str = "mlp",
+            activation: str = "relu"
+        ) -> None:
         """
         :param el_input_dim: Input dimension for electricity price data
         :param process_input_dim: Input dimension for process data
@@ -205,7 +213,12 @@ class TripleEncoderDQN(nn.Module):
         fc_layers.append(nn.Linear(int(hidden_units), int(action_dim)))
         self.fc_layers = nn.Sequential(*fc_layers)
 
-    def forward(self, price_data, process_data, gas_eua_data):
+    def forward(
+            self,
+            price_data: torch.Tensor,
+            process_data: torch.Tensor,
+            gas_eua_data: torch.Tensor
+        ) -> torch.Tensor:
         """
         Forward pass through the TripleEncoderDQN.
         :param price_data: Electricity price data tensor of shape
@@ -224,7 +237,7 @@ class TripleEncoderDQN(nn.Module):
 
 class PrioritizedReplayBuffer:
     """Prioritized Experience Replay Buffer for DQN."""
-    def __init__(self, capacity, alpha=0.6):
+    def __init__(self, capacity: int, alpha: float = 0.6) -> None:
         """
         :param capacity: Maximum number of experiences to store
         :param alpha: Prioritization exponent (0 = no prioritization, 1 = full prioritization)
@@ -233,7 +246,14 @@ class PrioritizedReplayBuffer:
         self.priorities = deque(maxlen=capacity)
         self.alpha = alpha
 
-    def push(self, state, action, reward, next_state, done):
+    def push(
+            self,
+            state: dict[str, Any],
+            action: int,
+            reward: float,
+            next_state: dict[str, Any],
+            done: bool
+        ) -> None:
         """
         Add a new experience to the buffer with maximum priority.
         :param state: Current state
@@ -246,7 +266,14 @@ class PrioritizedReplayBuffer:
         self.buffer.append((state, action, reward, next_state, done))
         self.priorities.append(max_priority)
 
-    def sample(self, batch_size, beta=0.4):
+    def sample(
+            self,
+            batch_size: int,
+            beta: float = 0.4
+        ) -> tuple[
+            np.ndarray, np.ndarray, np.ndarray, np.ndarray,
+            np.ndarray, torch.FloatTensor, np.ndarray
+        ]:
         """
         Sample a batch of experiences based on their priorities.
         :param batch_size: Number of experiences to sample
@@ -277,7 +304,7 @@ class PrioritizedReplayBuffer:
         return (np.array(states), np.array(actions), np.array(rewards),
                 np.array(next_states), np.array(dones), torch.FloatTensor(weights), indices)
 
-    def update_priorities(self, indices, priorities):
+    def update_priorities(self, indices: np.ndarray, priorities: np.ndarray) -> None:
         """
         Update the priorities of sampled experiences.
         :param indices: List of indices of the experiences to update
@@ -286,7 +313,7 @@ class PrioritizedReplayBuffer:
         for idx, priority in zip(indices, priorities):
             self.priorities[idx] = priority
 
-    def __len__(self):
+    def __len__(self) -> int:
         """
         Return the current size of the buffer.
         :return: Number of experiences in the buffer
@@ -299,11 +326,24 @@ class DQNModel:
     """
     def __init__(
             self,
-            el_input_dim, process_input_dim, gas_eua_input_dim, 
-            action_dim, embed_dim, hidden_layers, hidden_units, buffer_capacity, batch_size, gamma, lr,
-            price_encoder_type="conv", process_encoder_type="gru", gas_eua_encoder_type="mlp",
-            activation="relu", learning_starts=10000, seed=None
-        ):
+            el_input_dim: int,
+            process_input_dim: int,
+            gas_eua_input_dim: int,
+            action_dim: int,
+            embed_dim: int,
+            hidden_layers: int,
+            hidden_units: int,
+            buffer_capacity: int,
+            batch_size: int,
+            gamma: float,
+            lr: float,
+            price_encoder_type: str = "conv",
+            process_encoder_type: str = "gru",
+            gas_eua_encoder_type: str = "mlp",
+            activation: str = "relu",
+            learning_starts: int = 10000,
+            seed: int | None = None
+        ) -> None:
         """
         :param el_input_dim: Input dimension for electricity price data
         :param process_input_dim: Input dimension for process data
@@ -358,7 +398,7 @@ class DQNModel:
         self.optimizer = torch.optim.Adam(self.policy_net.parameters(), lr=lr)
         self.replay_buffer = PrioritizedReplayBuffer(buffer_capacity)
 
-    def update(self):
+    def update(self) -> torch.Tensor | None:
         """
         Update the policy network using a batch from the replay buffer.
         :return: Loss value or None if not enough samples
@@ -435,7 +475,7 @@ class DQNModel:
 
         return loss
 
-    def save(self, filepath):
+    def save(self, filepath: str) -> None:
         """
         Save the policy network, target network, optimizer, and replay buffer.
         :param filepath: Path to save the model
@@ -452,7 +492,7 @@ class DQNModel:
             }
         }, filepath)
 
-    def load(self, filepath):
+    def load(self, filepath: str) -> None:
         """
         Load the policy network, target network, optimizer, epsilon, and replay buffer.
         :param filepath: Path to load the model from
@@ -467,7 +507,7 @@ class DQNModel:
             self.replay_buffer.buffer = deque(data['buffer'], maxlen=data['capacity'])
             self.replay_buffer.priorities = deque(data['priorities'], maxlen=data['capacity'])
 
-    def update_target_network(self, tau=0.005):
+    def update_target_network(self, tau: float = 0.005) -> None:
         """
         Polyak (soft) update for the target network.
         :param tau: Interpolation parameter for soft update (0 < tau <= 1)

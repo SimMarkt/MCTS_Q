@@ -1,4 +1,4 @@
-# --------------------------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------------------
 # MCTS_Q: Monte Carlo Tree Search with Deep-Q-Network
 # GitHub Repository: https://github.com/SimMarkt/MCTS_Q
 #
@@ -9,7 +9,7 @@
 #               and emission spot markets.
 # > Scenario 3: Includes participation in EEG tenders with a combined heat and power (CHP) plant, 
 #               while trading in the electricity spot market.
-# --------------------------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------------------
 
 # Abbreviations:
 #   SNG: Synthetic natural gas

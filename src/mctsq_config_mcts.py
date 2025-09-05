@@ -15,6 +15,7 @@ import math
 import random
 import copy
 import gc
+from typing import Any
 
 import yaml
 import numpy as np
@@ -22,18 +23,28 @@ import torch
 import torch.nn.functional as F
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
+import gymnasium as gym
 
 from src.mctsq_config_dqn import DQNModel
+from src.mctsq_utils import CallbackVal
+from src.mctsq_config_env import EnvConfiguration
 
-class MCTS_Q:
+class MCTSQ:
     """ MCTS_Q algorithm with DQN guidance."""
-    def __init__(self, env, seed, config=None, tb_log=None):
+    def __init__(
+            self,
+            env: gym.Env,
+            seed: int,
+            config: "MCTSQConfiguration" | None = None,
+            tb_log: str | None = None
+        ) -> None:
         """
         Initialize MCTS_Q with the training environment and DQN agent.
         :param env: The environment
         :param dqn: The DQN model for support of MCTS action selection
         :param seed: Random seed for reproducibility
         :param config: MCTSQConfig instance
+        :param tb_log: Path for Tensorboard log
         """
         if config is not None:
             self.__dict__.update(config.__dict__)
@@ -89,7 +100,7 @@ class MCTS_Q:
 
         self.deterministic = False
 
-    def learn(self, total_timesteps, callback):
+    def learn(self, total_timesteps: int, callback: CallbackVal) -> None:
         """
         Learn MCTS_Q parameters.
         :param total_timesteps: Total number of timesteps for training
@@ -148,7 +159,7 @@ class MCTS_Q:
         if self.writer is not None:
             self.writer.close()
 
-    def predict(self, env, deterministic=False):
+    def predict(self, env: gym.Env, deterministic: bool = False) -> int:
         """
         Perform MCTS search to find the best action
         :param env: The environment to search in
@@ -173,7 +184,7 @@ class MCTS_Q:
 
         return best_action
 
-    def _select(self, node):
+    def _select(self, node: "MCTSNode") -> "MCTSNode":
         """
         Select the best child node based on PUCT (Upper Confidence Bound for Trees).
         :param node: The current node in the MCTS tree
@@ -214,7 +225,7 @@ class MCTS_Q:
 
         return node
 
-    def _expand(self, node):
+    def _expand(self, node: "MCTSNode") -> "MCTSNode":
         """
         Expand the node by adding a new child node.
         :param node: The current node in the MCTS tree
@@ -238,7 +249,7 @@ class MCTS_Q:
         node.children.append(child_node)
         return child_node
 
-    def _evaluate(self, node):
+    def _evaluate(self, node: "MCTSNode") -> float:
         """
         Use the DQN model's value function to estimate the value of a leaf node.
         :param node: The leaf node to evaluate
@@ -252,7 +263,7 @@ class MCTS_Q:
             q_values = self.dqn.policy_net(price_state, process_state, gas_eua_state)
         return q_values.max().item()  # Use the maximum Q-value as the value estimate
 
-    def _backpropagate(self, node, value):
+    def _backpropagate(self, node: "MCTSNode", value: float) -> None:
         """
         Backpropagate the value from the leaf node to the root node
         :param node: The current node in the MCTS tree
@@ -263,7 +274,7 @@ class MCTS_Q:
             node.total_value += value
             node = node.parent
 
-    def _get_state(self, env):
+    def _get_state(self, env: gym.Env) -> tuple[Any, Any, Any]:
         """
         Get the state representation from the environment.
         :param env: The environment to get the state from
@@ -292,30 +303,29 @@ class MCTS_Q:
 
         return price_state, process_state, gas_eua_state
 
-    def save(self, filepath):
+    def save(self, filepath: str) -> None:
         """
         Save the DQN model parameters used by MCTS_Q.
         """
         self.dqn.save(filepath)
 
-    def load(self, filepath):
+    def load(self, filepath: str) -> None:
         """
         Load the DQN model parameters into MCTS_Q.
         """
         self.dqn.load(filepath)
 
-    def test(self, env_config, eps_sim_steps_test):
+    def test(self, env_config: EnvConfiguration, eps_sim_steps_test: int) -> dict[str, Any]:
         """
             Test MCTS_Q on the test environment
         """
-        _, _ = self.env.reset()  
+        _, _ = self.env.reset()
 
-        stats = np.zeros((eps_sim_steps_test, len(env_config.stats_names)))    
+        stats = np.zeros((eps_sim_steps_test, len(env_config.stats_names)))
         stats_dict_test={}
 
         # for i in tqdm(range(eps_sim_steps_test), desc="Testing MCTS_Q", unit="step"):
         for i in range(eps_sim_steps_test):
-            
             # Perform step based on MCTS with DQN values
             action = self.predict(self.env)
             _, _, terminated, _, info = self.env.step(action)
@@ -341,12 +351,11 @@ class MCTS_Q:
                             stats[i, j] = info[val]
                     j += 1
 
-            
-        for m in range(len(env_config.stats_names)):
-            stats_dict_test[env_config.stats_names[m]] = stats[:(eps_sim_steps_test), m]
+        for m, stats_n in enumerate(env_config.stats_names):
+            stats_dict_test[stats_n] = stats[:(eps_sim_steps_test), m]
 
         print(f"   >>Cumulative Reward {info['cum_reward']}")
-        
+
         return stats_dict_test
 
 
@@ -354,14 +363,24 @@ class MCTSNode:
     """
     Represents a node in the MCTS tree.
     """
-    def __init__(self, env, parent=None, action=None, done=False, remaining_steps=42, total_steps=42, depth=0, maximum_depth=42):
+    def __init__(
+            self,
+            env: gym.Env,
+            parent: "MCTSNode" | None = None,
+            action: int | None = None,
+            done: bool = False,
+            remaining_steps: int = 42,
+            total_steps: int = 42,
+            depth: int = 0,
+            maximum_depth: int = 42
+        ) -> None:
         self.env = env
         self.parent = parent
         self.action = action
         self.children = []
         self.visits = 0
         self.total_value = 0.0
-        self.done = done                               
+        self.done = done
         if remaining_steps < total_steps:
             self.remaining_steps = remaining_steps      # No. of steps remaining for the simulation
         else:
@@ -369,14 +388,14 @@ class MCTSNode:
         self.depth = depth
         self.maximum_depth = maximum_depth
 
-    def is_terminal(self):
+    def is_terminal(self) -> bool:
         """
         Check if the node is terminal (i.e., if the environment is done or maximum depth is reached)
         :return: True if the node is terminal, False otherwise
         """
         return self.done or self.depth >= self.maximum_depth
 
-    def is_fully_expanded(self):
+    def is_fully_expanded(self) -> bool:
         """
         Check if all possible actions have been tried at this node
         :return: True if all actions have been tried, False otherwise
@@ -384,42 +403,48 @@ class MCTSNode:
         legal_actions = self.get_legal_actions()
         tried_actions = [child.action for child in self.children]
         return set(tried_actions) == set(legal_actions)
-    
-    def get_legal_actions(self):
+
+    def get_legal_actions(self) -> list[int]:
         """
         Get the legal actions for the current node based on the environment's action space
         :return: List of legal actions
         """
         meth_state = self.env.Meth_State  # Access the Meth_State from the environment
         if meth_state == 0:     # 'standby'
-            return [0, 1, 2]    # Allows only standby, cooldown, and startup actions
+            # Allows only standby, cooldown, and startup actions
+            return [0, 1, 2]
         elif meth_state == 1:   # 'cooldown'
-            return [0, 1, 2]    # Allows only standby, cooldown, and startup actions
+            # Allows only standby, cooldown, and startup actions
+            return [0, 1, 2]
         elif meth_state == 2:   # 'startup'
-            return [0, 1, 3, 4] # Allows only standby, cooldown, and load level after startup (partial load, full load)
+            # Allows only standby, cooldown, and load level after startup (partial load, full load)
+            return [0, 1, 3, 4]
         elif meth_state == 3:   # 'partial load'
-            return [0, 1, 3, 4] # Allows only standby, cooldown, and load level (partial load, full load)
+            # Allows only standby, cooldown, and load level (partial load, full load)
+            return [0, 1, 3, 4]
         elif meth_state == 4:   # 'full load'
-            return [0, 1, 3, 4] # Allows only standby, cooldown, and load level (partial load, full load)
+            # Allows only standby, cooldown, and load level (partial load, full load)
+            return [0, 1, 3, 4]
         else:
             return list(range(self.env.action_space.n))  # Default to all actions
-        
-    def most_visited_child(self):
+
+    def most_visited_child(self) -> "MCTSNode":
         """
         Select the child node with the most visits
         :return: The child node with the highest number of visits
         """
         return max(self.children, key=lambda child: child.visits)
-    
+
 class MCTSQConfiguration():
     """
     Configuration class for MCTS_Q algorithm.
-    This class loads the configuration from a YAML file and initializes the MCTS_Q algorithm with the specified parameters.
+    This class loads the configuration from a YAML file and initializes the MCTS_Q algorithm
+    with the specified parameters.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         # Load the algorithm configuration from the YAML file
-        with open("config/config_mctsq.yaml", "r") as env_file:
+        with open("config/config_mctsq.yaml", "r", encoding="utf-8") as env_file:
             mctsq_config = yaml.safe_load(env_file)
 
         # Unpack data from dictionary
@@ -427,9 +452,11 @@ class MCTSQConfiguration():
 
         self.rl_alg_hyp = mctsq_config
 
-        self.str_alg = ""          # Initialize the string for the algorithm settings (used for file identification)
-        # Nested dictionary with hyperparameters, including abbreviation ('abb') and variable name ('var') 
-        # 'var' must match the notation in MCTS_Q/config/config_mctsq.yaml
+        # Initialize the string for the algorithm settings (used for file identification)
+        self.str_alg = ""
+        # Nested dictionary with hyperparameters, including abbreviation ('abb')
+        # and variable name ('var')
+        # > 'var' must match the notation in MCTS_Q/config/config_mctsq.yaml
         self.hyper = {'Iterations': {'abb' :"_it", 'var': 'iterations'},
                       'PUCT Initial Exploration': {'abb' :"_pu", 'var': 'c_init'},
                       'PUCT Exploration Increase': {'abb' :"_pi", 'var': 'c_base'},
@@ -446,16 +473,17 @@ class MCTSQConfiguration():
                       'Price encoder type': {'abb' :"_ee", 'var': 'price_encoder_type'},
                       'Process encoder type': {'abb' :"_pe", 'var': 'process_encoder_type'},
                       'Gas EUA encoder type': {'abb' :"_ge", 'var': 'gas_eua_encoder_type'},
-                      }         
+                      }
 
-    def get_hyper(self):
+    def get_hyper(self) -> str:
         """
-        Displays the algorithm's hyperparameters and returns a string identifier for file identification.
+        Displays the algorithm's hyperparameters and returns a string identifier
+        for file identification.
         :return str_alg: The hyperparameter settings as a string for file identification
         """
 
         # Display the chosen algorithm and its hyperparameters
-        print(f"    > MCTS_Q algorithm : >>> <<<")
+        print("    > MCTS_Q algorithm : >>> <<<")
         self.hyp_print('Iterations')
         self.hyp_print('PUCT Initial Exploration')
         self.hyp_print('PUCT Exploration Increase')
@@ -476,17 +504,29 @@ class MCTSQConfiguration():
 
         return self.str_alg
 
-    def hyp_print(self, hyp_name: str):
+    def hyp_print(self, hyp_name: str) -> None:
         """
-        Displays the value of a specific hyperparameter and adds it to the string identifier for file naming
+        Displays the value of a specific hyperparameter and adds it to the string identifier
+        for file naming
         :param hyp_name: Name of the hyperparameter to display
         """
-        assert hyp_name in self.hyper, f"Specified hyperparameter ({hyp_name}) is not part of the implemented settings!"
+        if hyp_name not in self.hyper:
+            raise ValueError(
+                f"Specified hyperparameter ({hyp_name}) is not part"
+                " of the implemented settings!"
+            )
         length_str = len(hyp_name)
-        if length_str > 32:         print(f"         {hyp_name} ({self.hyper[hyp_name]['abb']}): {self.rl_alg_hyp[self.hyper[hyp_name]['var']]}")
-        elif length_str > 22:       print(f"         {hyp_name} ({self.hyper[hyp_name]['abb']}):\t {self.rl_alg_hyp[self.hyper[hyp_name]['var']]}")
-        elif length_str > 15:       print(f"         {hyp_name} ({self.hyper[hyp_name]['abb']}):\t\t {self.rl_alg_hyp[self.hyper[hyp_name]['var']]}")
-        else:                       print(f"         {hyp_name} ({self.hyper[hyp_name]['abb']}):\t\t\t {self.rl_alg_hyp[self.hyper[hyp_name]['var']]}")
-        self.str_alg += self.hyper[hyp_name]['abb'] + str(self.rl_alg_hyp[self.hyper[hyp_name]['var']])
-
-     
+        if length_str > 32:
+            print(f"         {hyp_name} ({self.hyper[hyp_name]['abb']}):"
+                  f" {self.rl_alg_hyp[self.hyper[hyp_name]['var']]}")
+        elif length_str > 22:
+            print(f"         {hyp_name} ({self.hyper[hyp_name]['abb']}):"
+                  f"\t {self.rl_alg_hyp[self.hyper[hyp_name]['var']]}")
+        elif length_str > 15:
+            print(f"         {hyp_name} ({self.hyper[hyp_name]['abb']}):"
+                  f"\t\t {self.rl_alg_hyp[self.hyper[hyp_name]['var']]}")
+        else:
+            print(f"         {hyp_name} ({self.hyper[hyp_name]['abb']}):"
+                  f"\t\t\t {self.rl_alg_hyp[self.hyper[hyp_name]['var']]}")
+        self.str_alg += (self.hyper[hyp_name]['abb'] +
+                         str(self.rl_alg_hyp[self.hyper[hyp_name]['var']]))

@@ -322,6 +322,12 @@ python -m venv venv
 # Install the required python libraries
 pip install -r requirements.txt
 
+# Start training (version with deepcopy of the environment)
+python mctsq_main.py
+
+# Start training (version with improved performance)
+python mctsq_main_per.py
+
 ```
 
 After setting up the Python environment and installing the necessary packages, you can adjust the environment, algorithm, and training configurations by modifying the YAML files in the `config/` directory. The training is initiated by running the main script `mctsq_main.py` or `mctsq_main_per.py`. The latter includes performance improvements for the MCTS_Q algorithm, such as faster inference using JIT-based compiling of the DQN model and batch inference. In addition, the `ptg_gym_env_per.py` script is designed to avoid deep copy operations in the MCTS part of the algorithm, which can be computationally expensive.
@@ -381,7 +387,7 @@ If you use **MCTS_Q** in your research, please cite it using the following BibTe
 
 ## References
 
-[1] S. Markthaler, "*Optimization of Power-to-Gas system operation and dispatch using Deep Reinforcement Learning*", Dissertation (PhD Thesis), Friedrich-Alexander-Universität Erlangen-Nürnberg, 2025 (not yet been published).
+[1] S. Markthaler, "*Optimization of Power-to-Gas system operation and dispatch using Deep Reinforcement Learning*", Dissertation (PhD Thesis), Friedrich-Alexander-Universität Erlangen-Nürnberg, 2025, https://open.fau.de/handle/openfau/37298
 
 [2] S. Markthaler, "*RL_PtG: Deep Reinforcement Learning for Power-to-Gas dispatch optimization*", 2024, https://github.com/SimMarkt/RL_PtG
 

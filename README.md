@@ -165,6 +165,8 @@ MCTS_Q/
 │
 ├── tensorboard/
 │
+├── tests/
+│
 ├── requirements.txt
 ├── mctsq_main_per.py
 ├── mctsq_main.py
@@ -283,6 +285,9 @@ Contains source code for pre- and postprocessing:
 
 ### `tensorboard/`
 Stores *TensorBoard logs* for monitoring RL training progress.
+
+### `tests/`
+Unit test files for the project.
 
 ### **Main Scripts**  
 - **`mctsq_main.py`** – The main script for training the **MCTS_Q** on the PtG dispatch task.  
